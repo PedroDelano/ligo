@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Go Board</title>
+  <style>
+    :root{
+      --bg: #0f1115; --panel:#181b22; --ink:#e6e9ef; --muted:#a6adbb; --accent:#5fb3f7;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font:14px/1.4 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+      color:var(--ink); background:radial-gradient(1000px 600px at 10% -10%,#1d2230,transparent), var(--bg);
+      display:flex; align-items:center; justify-content:center; padding:24px;
+    }
+    .app{width:min(1100px,95vw)}
+    .bar{
+      display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between;
+      background:linear-gradient(180deg,#1b1f29, #141824); border:1px solid #22283a; border-radius:16px; padding:12px 14px; box-shadow:0 10px 30px rgba(0,0,0,.35);
+    }
+    .group{display:flex; gap:10px; align-items:center}
+    label{color:var(--muted)}
+    select, button, input[type="checkbox"]{
+      background:#0f1320; color:var(--ink); border:1px solid #27314a; border-radius:10px; padding:8px 10px;
+    }
+    button{cursor:pointer}
+    button.primary{border-color:#2d6eb3}
+    .board-wrap{
+      margin-top:14px; background:linear-gradient(135deg,#caa56a,#a77a35 55%,#8c6226);
+      border-radius:18px; border:1px solid #3a2f1a; padding:14px;
+      box-shadow:inset 0 0 0 1px rgba(255,255,255,.03), 0 30px 50px rgba(0,0,0,.35);
+    }
+    canvas{display:block; width:100%; height:auto; border-radius:12px; background:#e5c592; box-shadow:inset 0 0 0 1px rgba(0,0,0,.2)}
+    .legend{margin-top:8px; display:flex; gap:16px; color:var(--muted)}
+    .dot{width:10px; height:10px; border-radius:50%}
+    .b{background:#111}
+    .w{background:#eee; border:1px solid #d0d0d0}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="bar">
+      <div class="group">
+        <label for="size">Board</label>
+        <select id="size" title="Board size">
+          <option value="19" selected>19×19</option>
+          <option value="13">13×13</option>
+          <option value="9">9×9</option>
+        </select>
+        <label><input id="coords" type="checkbox" checked /> Show coordinates</label>
+        <label><input id="hover" type="checkbox" checked /> Hover hint</label>
+      </div>
+      <div class="group">
+        <button id="undo">Undo</button>
+        <button id="clear">Clear</button>
+        <button id="swap" class="primary" title="Swap next color">Swap turn</button>
+      </div>
+    </div>
+
+    <div class="board-wrap">
+      <canvas id="go" width="900" height="900" aria-label="Go board" role="img"></canvas>
+      <div class="legend">
+        <div class="group"><span class="dot b"></span> Black</div>
+        <div class="group"><span class="dot w"></span> White</div>
+        <div class="group" id="status"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Basic Go board with stones, hover, undo, and size switch. No rules/captures.
+    const canvas = document.getElementById('go');
+    const ctx = canvas.getContext('2d');
+    const sizeSel = document.getElementById('size');
+    const showCoords = document.getElementById('coords');
+    const showHover = document.getElementById('hover');
+    const undoBtn = document.getElementById('undo');
+    const clearBtn = document.getElementById('clear');
+    const swapBtn = document.getElementById('swap');
+    const statusEl = document.getElementById('status');
+
+    let N = 19;              // board dimension
+    let stones = [];         // 0 empty, 1 black, 2 white
+    let moveList = [];       // stack of moves
+    let next = 1;            // next to play (1=B, 2=W)
+    let hoverRC = null;      // current hover cell
+
+    // Handle pixel density for crisp lines
+    function fitDPR(){
+      const dpr = window.devicePixelRatio || 1;
+      const cssSize = canvas.clientWidth; // square
+      canvas.width = Math.round(cssSize * dpr);
+      canvas.height = canvas.width;
+      ctx.setTransform(dpr,0,0,dpr,0,0); // draw in CSS pixels
+    }
+
+    function initBoard(n){
+      N = n; stones = Array.from({length:N}, ()=>Array(N).fill(0));
+      moveList = []; next = 1; hoverRC = null; draw();
+    }
+
+    function draw(){
+      fitDPR();
+      const W = canvas.clientWidth; // CSS pixels after DPR transform
+      const pad = 28;               // edge padding
+      const cell = (W - pad*2) / (N-1);
+
+      // Wood background is the element behind canvas; keep canvas clean.
+      // Clear
+      ctx.clearRect(0,0,W,W);
+
+      // Grid
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+      for(let i=0;i<N;i++){
+        const p = pad + i*cell;
+        // vertical
+        ctx.beginPath(); ctx.moveTo(p,pad); ctx.lineTo(p,W-pad); ctx.stroke();
+        // horizontal
+        ctx.beginPath(); ctx.moveTo(pad,p); ctx.lineTo(W-pad,p); ctx.stroke();
+      }
+
+      // Star points (hoshi)
+      const hoshiMap = {9:[2,4,6], 13:[3,6,9], 19:[3,9,15]};
+      const hs = hoshiMap[N] || [];
+      ctx.fillStyle = 'rgba(0,0,0,0.8)';
+      hs.forEach(r=>hs.forEach(c=>{
+        const {x,y} = rcToXY(r,c,pad,cell);
+        ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill();
+      }));
+
+      // Coordinates
+      if(showCoords.checked){
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.font = '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto';
+        const letters = coordLetters(N);
+        for(let i=0;i<N;i++){
+          const {x,y} = rcToXY(i,0,pad,cell); // left edge
+          ctx.fillText(String(N-i), 6, y+4);
+          const {x:xe} = rcToXY(i,N-1,pad,cell); // right edge
+          ctx.fillText(String(N-i), W-18, y+4);
+          const {x:tx,y:ty} = rcToXY(0,i,pad,cell); // top
+          ctx.fillText(letters[i], tx-4, 16);
+          const {y:by} = rcToXY(N-1,i,pad,cell); // bottom
+          ctx.fillText(letters[i], tx-4, W-6);
+        }
+      }
+
+      // Stones
+      for(let r=0;r<N;r++){
+        for(let c=0;c<N;c++){
+          const v = stones[r][c];
+          if(!v) continue;
+          drawStone(r,c,v,pad,cell);
+        }
+      }
+
+      // Hover hint
+      if(showHover.checked && hoverRC){
+        const [r,c] = hoverRC; if(stones[r][c]===0){ drawStone(r,c,next,pad,cell, true); }
+      }
+
+      statusEl.textContent = `Next: ${next===1?'Black':'White'} • Moves: ${moveList.length}`;
+    }
+
+    function coordLetters(n){
+      // Go coordinates typically skip I; produce A..T (minus I) up to n
+      const letters=[]; let ch=65; // 'A'
+      while(letters.length<n){
+        const L = String.fromCharCode(ch++);
+        if(L==='I') continue; letters.push(L);
+      }
+      return letters;
+    }
+
+    function rcToXY(r,c,pad,cell){
+      return {x: pad + c*cell, y: pad + r*cell};
+    }
+
+    function drawStone(r,c,v,pad,cell,ghost=false){
+      const {x,y}=rcToXY(r,c,pad,cell);
+      const radius = cell*0.45;
+      ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2);
+      if(v===1){ // black
+        const g = ghost? 0.2: 1.0; // opacity for hover
+        ctx.fillStyle = `rgba(20,20,20,${g})`;
+        ctx.fill();
+        ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.stroke();
+        // subtle highlight
+        if(!ghost){
+          const grad = ctx.createRadialGradient(x-radius*0.4, y-radius*0.4, radius*0.1, x, y, radius);
+          grad.addColorStop(0,'rgba(255,255,255,0.18)'); grad.addColorStop(1,'rgba(0,0,0,0)');
+          ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.fillStyle=grad; ctx.fill();
+        }
+      } else { // white
+        const g = ghost? 0.35: 1.0;
+        ctx.fillStyle = `rgba(245,245,245,${g})`; ctx.fill();
+        ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.stroke();
+        if(!ghost){
+          const grad = ctx.createRadialGradient(x-radius*0.4, y-radius*0.4, radius*0.1, x, y, radius);
+          grad.addColorStop(0,'rgba(255,255,255,0.45)'); grad.addColorStop(1,'rgba(0,0,0,0)');
+          ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.fillStyle=grad; ctx.fill();
+        }
+      }
+    }
+
+    function eventToRC(evt){
+      const rect = canvas.getBoundingClientRect();
+      const pad = 28; const W = canvas.clientWidth; const cell = (W - pad*2)/(N-1);
+      const x = evt.clientX - rect.left; const y = evt.clientY - rect.top;
+      // nearest grid intersection
+      let c = Math.round((x - pad) / cell);
+      let r = Math.round((y - pad) / cell);
+      if(r<0||r>=N||c<0||c>=N) return null; return [r,c];
+    }
+
+    canvas.addEventListener('mousemove', e=>{ hoverRC = eventToRC(e); draw(); });
+    canvas.addEventListener('mouseleave', ()=>{ hoverRC = null; draw(); });
+
+    canvas.addEventListener('click', e=>{
+      const rc = eventToRC(e); if(!rc) return; const [r,c] = rc;
+      if(stones[r][c]!==0) return; // occupied
+      stones[r][c] = next; moveList.push({r,c,color:next}); next = (next===1?2:1); draw();
+    });
+
+    canvas.addEventListener('contextmenu', e=>{ // right-click to erase
+      e.preventDefault(); const rc = eventToRC(e); if(!rc) return; const [r,c] = rc;
+      if(stones[r][c]!==0){ stones[r][c]=0; moveList = moveList.filter(m=>!(m.r===r&&m.c===c)); draw(); }
+    });
+
+    sizeSel.addEventListener('change', ()=> initBoard(parseInt(sizeSel.value,10)));
+    undoBtn.addEventListener('click', ()=>{
+      const m = moveList.pop(); if(m){ stones[m.r][m.c]=0; next = m.color; draw(); }
+    });
+    clearBtn.addEventListener('click', ()=> initBoard(N));
+    swapBtn.addEventListener('click', ()=>{ next = (next===1?2:1); draw(); });
+
+    window.addEventListener('resize', draw);
+    initBoard(N);
+  </script>
+</body>
+</html>
