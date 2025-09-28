@@ -16,9 +16,30 @@ class Board(models.Model):
 
 
 class Move(models.Model):
-    board = models.ForeignKey(Board, on_delete=models.CASCADE)
+    board = models.ForeignKey(Board, on_delete=models.CASCADE, db_index=True)
     timestamp = models.DateTimeField(auto_now_add=True)
     move_number = models.IntegerField()
     x = models.IntegerField()
     y = models.IntegerField()
     color = models.CharField(max_length=1, choices=[("B", "Black"), ("W", "White")])
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["board", "x", "y"], name="uniq_move_per_intersection"
+            ),
+            models.UniqueConstraint(
+                fields=["board", "move_number"], name="uniq_move_number_per_board"
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["board", "x", "y"], name="idx_board_xy"),
+            models.Index(
+                fields=["board", "-move_number"], name="idx_board_lastmove_desc"
+            ),
+        ]
+
+
+class LastMoveCache(models.Model):
+    board = models.OneToOneField(Board, on_delete=models.CASCADE, primary_key=True)
+    move = models.OneToOneField(Move, on_delete=models.CASCADE)

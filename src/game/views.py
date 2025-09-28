@@ -1,13 +1,12 @@
-import logging
+import json
+import time
 
-import pydantic
-from django.db import transaction
-from django.http import Http404, HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.template import loader
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 
-from .models import Board, Game, Move
+from .models import Board, Game, LastMoveCache, Move
 from .responses import APIResponse, StoneColor
 
 
@@ -35,27 +34,21 @@ def new_game(request, player1, player2, board_size=19):
 
 
 def board_state(request, board_id):
-    try:
-        board = Board.objects.get(id=board_id)
-    except Board.DoesNotExist:
-        raise Http404("Board not found")
+    board = Board.objects.only("id", "size").get(id=board_id)
+    last = (
+        Move.objects.filter(board=board)
+        .only("color", "move_number")
+        .order_by("-move_number")
+        .first()
+    )
+    next_color = "W" if last and last.color == "B" else "B"
+    first_move = last is None
 
     moves = list(
         Move.objects.filter(board=board)
         .order_by("move_number")
         .values("x", "y", "color", "move_number")
     )
-    next_color = "B"
-    if moves:
-        next_color = "W" if moves[-1]["color"] == "B" else "B"
-
-    first_move = len(moves) == 0
-
-    assert isinstance(board.size, int)
-    assert isinstance(board.id, int)
-    assert isinstance(moves, list)
-    assert isinstance(next_color, str)
-    assert isinstance(first_move, bool)
 
     return JsonResponse(
         APIResponse(
@@ -70,8 +63,7 @@ def board_state(request, board_id):
     )
 
 
-@require_http_methods(["POST", "GET"])
-@transaction.atomic
+@require_http_methods(["POST"])
 def place_stone(request, board_id, x, y, color):
     color = StoneColor(color)
     board = Board.objects.select_for_update().get(id=board_id)
@@ -86,27 +78,38 @@ def place_stone(request, board_id, x, y, color):
             status=400,
         )
 
-    existing_move = Move.objects.filter(board=board, x=x, y=y).first()
-    if existing_move:
+    if Move.objects.filter(board=board, x=x, y=y).exists():
         return JsonResponse(
             APIResponse(
                 ok=False,
                 code="POSITION_OCCUPIED",
                 message="Invalid move: position occupied",
-            ).model_dump(),
+            ).model_dump()
         )
 
-    last_move = Move.objects.filter(board=board).order_by("-move_number").first()
-    if last_move and last_move.color == color.value:
+    last = (
+        LastMoveCache.objects.select_related("move")
+        .filter(board=board)
+        .values("move__color", "move__move_number")
+        .first()
+    )
+    if last is not None and last.get("move__color") == color.value:
         return JsonResponse(
             APIResponse(
-                ok=False,
-                code="NOT_YOUR_TURN",
-                message="Invalid move: not your turn",
+                ok=False, code="NOT_YOUR_TURN", message="Invalid move: not your turn"
             ).model_dump(),
             status=400,
         )
 
-    next_num = 1 if last_move is None else last_move.move_number + 1
-    Move.objects.create(board=board, move_number=next_num, x=x, y=y, color=color.value)
+    next_num = 1 if last is None else last.get("move__move_number") + 1
+
+    # Inserts after validation
+    m = Move.objects.create(
+        board=board, move_number=next_num, x=x, y=y, color=color.value
+    )
+    LastMoveCache.objects.update_or_create(
+        board=board,
+        defaults={"move_id": m.id},
+    )
+
     return JsonResponse(APIResponse(data={"move_number": next_num}).model_dump())

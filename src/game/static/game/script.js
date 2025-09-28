@@ -19,27 +19,24 @@ canvas.width = Math.round(W * dpr);
 canvas.height = Math.round(H * dpr);
 ctx.scale(dpr, dpr);
 let hover = { i: null, j: null, valid: false };
-
-function getCsrfToken() {
+const CSRF_TOKEN = (() => {
     const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
     return m ? decodeURIComponent(m[1]) : "";
-}
+})();
+
+
+// function getCsrfToken() {
+//     const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+//     return m ? decodeURIComponent(m[1]) : "";
+// }
 
 async function loadBoard() {
     const res = await fetch(`/game/board/${BOARD_ID}/`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": getCsrfToken(),
-        },
+        method: "GET",
         credentials: "same-origin",
-        body: "{}"
-    }
-    );
+    });
     if (!res.ok) throw new Error("Failed to load board");
     const data = await res.json();
-
-    // unwrap if APIResponse wrapped it as { data: {...} }
     const payload = data?.data ?? data;
 
     SIZE = payload.size;
@@ -61,16 +58,11 @@ async function loadBoard() {
 
 
 async function sendMove(i, j) {
-    READY = false;
     const colorChar = (turn === 1 ? "B" : "W");
     const res = await fetch(`/game/place/${BOARD_ID}/${i}/${j}/${colorChar}/`, {
         method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": getCsrfToken(),
-        },
         credentials: "same-origin",
-        body: "{}"
+        headers: { "X-CSRFToken": CSRF_TOKEN }
     });
 
     const payload = await res.json();
@@ -78,7 +70,6 @@ async function sendMove(i, j) {
         showMsg(payload.message || "Move rejected");
         return;
     }
-    // Re-sync from server to stay authoritative
     await loadBoard();
     clearMsg();
 }
@@ -91,20 +82,6 @@ function clearMsg() {
     const m = document.getElementById("msg");
     m.textContent = "";
 }
-
-// In your click handler, replace the local write with:
-canvas.addEventListener("click", async (e) => {
-    const { x, y } = getMousePos(e);
-    const { i, j, valid } = pxToCoord(x, y);
-    if (!valid) return;
-    if (board[i][j] !== 0) return showMsg("Position occupied");
-
-    try {
-        await sendMove(i, j);
-    } catch (err) {
-        showMsg("Network error");
-    }
-});
 
 const coordToPx = (i, j) => ({
     x: PADDING + i * CELL,
@@ -203,7 +180,6 @@ function render() {
             if (v !== 0) drawStone(i, j, v, 1);
         }
     }
-    // ghost
     if (hover.valid && hover.i !== null && hover.j !== null) {
         if (board[hover.i][hover.j] === 0) {
             drawStone(hover.i, hover.j, turn, 0.5);
@@ -231,16 +207,21 @@ canvas.addEventListener("mouseleave", () => {
     render();
 });
 
-canvas.addEventListener("click", (e) => {
+canvas.addEventListener("click", async (e) => {
     const { x, y } = getMousePos(e);
     const { i, j, valid } = pxToCoord(x, y);
     if (!valid) return;
+    if (board[i][j] !== 0) return showMsg("Position occupied");
 
-    if (board[i][j] === 0) {
-        board[i][j] = turn;
-        turn = (turn === 1 ? 2 : 1);
-        updateTurnLabel();
-        render();
+    board[i][j] = turn;
+    updateTurnLabel();
+    render();
+
+    try {
+        await sendMove(i, j);
+        clearMsg();
+    } catch {
+        showMsg("Network error");
     }
 });
 
