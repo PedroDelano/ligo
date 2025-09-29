@@ -66,24 +66,24 @@ def board_state(request, board_id):
     first_move = len(moves) == 0
     if first_move:
         next_color = "B"
+        current_color = "W"
     else:
         next_color = "B" if moves[-1]["color"] == "W" else "W"
+        current_color = moves[-1]["color"]
 
     game = models.Game(
         board=models.Board(size=board.size),
         moves=[models.Move(**move) for move in moves],
     )
-    current_game_state, captured_stones = capture.Capture.remove_captured_stones(game)
+    current_game_state, captured_stones = capture.Capture.remove_captured_stones(
+        game, last_played_color=current_color
+    )
     assert isinstance(current_game_state, models.Game)
     assert all(isinstance(m, models.Move) for m in captured_stones)
 
     if len(captured_stones) > 0:
         moves = [m.model_dump() for m in current_game_state.moves]
-        Move.objects.filter(
-            board=board,
-            x__in=[m.x for m in captured_stones],
-            y__in=[m.y for m in captured_stones],
-        ).update(alive=False)
+        capture.Capture.mark_captured(board, captured_stones)
 
     return JsonResponse(
         APIResponse(

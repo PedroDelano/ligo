@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from .models import Game, Group, Move, StoneColor
 
@@ -37,21 +37,26 @@ class Groups:
         return liberties
 
     @classmethod
-    def get_group(cls, game: Game, move: Move) -> Group:
+    def get_group(
+        cls, game: Game, move: Move, curGroup: Optional[Group] = None
+    ) -> Group:
         assert isinstance(game, Game)
         assert isinstance(move, Move)
         color = StoneColor(move.color)
 
-        group_stones = [move]
-        liberties: int = cls.count_liberty(move, game)
+        if curGroup is not None:
+            group_stones = curGroup
+        else:
+            group_stones = [move]
 
         for other_move in game.moves:
-            if other_move == move:
+            if other_move in group_stones:
                 continue
             if other_move.color == color and cls.is_adjacent(move, other_move):
                 group_stones.append(other_move)
-                liberties += cls.count_liberty(other_move, game)
+                return cls.get_group(game, other_move, group_stones)
 
+        liberties = sum(cls.count_liberty(stone, game) for stone in group_stones)
         alive = cls.is_alive(liberties)
         return Group(
             stones=group_stones,

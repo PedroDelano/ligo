@@ -1,29 +1,75 @@
 from typing import List, Tuple
 
+from django.db.models import Q
+
+from ..models import Board as BoardDB
+from ..models import Move as MoveDB
 from .groups import Groups
 from .models import Game, Move, StoneColor
 
 
 class Capture:
     @classmethod
-    def remove_captured_stones(cls, game: Game) -> Tuple[Game, List[Move]]:
+    def remove_captured_stones(
+        cls, game: Game, last_played_color: StoneColor, debug: bool = False
+    ) -> Tuple[Game, List[Move]]:
         assert isinstance(game, Game)
+        assert isinstance(debug, bool)
         captured_stones: List[Move] = []
+        last_played_color = StoneColor(last_played_color)
+
+        # Will check only the opponent's color for captures
+        check_color = (
+            StoneColor.BLACK
+            if last_played_color == StoneColor.WHITE
+            else StoneColor.WHITE
+        )
+        current_move_state = [
+            move
+            for group in Groups.get_groups(game, last_played_color)
+            for move in group.stones
+        ]
+
+        if debug:
+            print(
+                f"Last played color: {last_played_color}, checking for captures of {check_color}"
+            )
 
         if len(game.moves) == 0:
             return game, captured_stones
 
-        groups = Groups.get_groups(game, StoneColor.BLACK) + Groups.get_groups(
-            game, StoneColor.WHITE
-        )
+        check_groups = Groups.get_groups(game, check_color)
 
-        moves = []
-        for group in groups:
-            if group.alive:
-                moves.extend(group.stones)
+        if debug:
+            for group in check_groups:
+                print(
+                    f"Group color: {group.color}, alive: {group.alive}, liberties: {group.liberties}, size: {group.size}"
+                )
+                for stone in group.stones:
+                    print(f"  Stone at ({stone.x}, {stone.y})")
+
+        for group in check_groups:
+            if group.alive is True:
+                if debug:
+                    print(
+                        f"Keeping group of color {group.color} with stones at {[(s.x, s.y) for s in group.stones]}"
+                    )
+                current_move_state.extend(group.stones)
             else:
+                if debug:
+                    print(
+                        f"Capturing group of color {group.color} with stones at {[(s.x, s.y) for s in group.stones]}"
+                    )
                 captured_stones.extend(group.stones)
 
-        assert all(isinstance(m, Move) for m in moves)
+        assert all(isinstance(m, Move) for m in current_move_state)
         assert all(isinstance(m, Move) for m in captured_stones)
-        return Game(board=game.board, moves=moves), captured_stones
+        return Game(board=game.board, moves=current_move_state), captured_stones
+
+    def mark_captured(board: BoardDB, stones: List[Move]) -> MoveDB:
+        assert isinstance(board, BoardDB)
+        assert all(isinstance(s, Move) for s in stones)
+        q = Q()
+        for s in stones:
+            q |= Q(x=s.x, y=s.y)
+        return MoveDB.objects.filter(board=board).filter(q).update(alive=False)
