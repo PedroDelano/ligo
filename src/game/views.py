@@ -1,22 +1,24 @@
-
 from django.http import HttpResponse, JsonResponse
 from django.template import loader
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 
 from .models import Board, Game, LastMoveCache, Move
-from .responses import APIResponse, StoneColor
+from .responses import APIResponse
+from .rules import capture, models
 
 
 def index(request):
-    return HttpResponse("Hello, world. You're at the polls index.")
+    template = loader.get_template("game/index.html")
+    return HttpResponse(template.render({}, request))
 
 
 @ensure_csrf_cookie
-def new_game(request, player1, player2, board_size=19):
+def new_game(request, player1, player2, board_size):
     assert isinstance(player1, str)
     assert isinstance(player2, str)
     assert isinstance(board_size, int)
+    assert board_size in models.VALID_BOARD_SIZES
     game = Game.objects.create(user_white=player1, user_black=player2)
     board = Board.objects.create(game=game, size=board_size)
     context = {
@@ -26,27 +28,62 @@ def new_game(request, player1, player2, board_size=19):
         "player_2": player2,
         "board_size": board_size,
     }
-    template = loader.get_template("game/index.html")
+    template = loader.get_template("game/game.html")
     print(f"New game created: {context}")
     return HttpResponse(template.render(context, request))
 
 
-def board_state(request, board_id):
-    board = Board.objects.only("id", "size").get(id=board_id)
-    last = (
-        Move.objects.filter(board=board)
-        .only("color", "move_number")
-        .order_by("-move_number")
-        .first()
-    )
-    next_color = "W" if last and last.color == "B" else "B"
-    first_move = last is None
+def get_game(request, game_id):
+    game = Game.objects.only("id", "user_white", "user_black").get(id=game_id)
+    board = Board.objects.filter(game_id=game_id).only("id", "size").get()
+    context = {
+        "game_id": game.id,
+        "board_id": board.id,
+        "player_1": game.user_white,
+        "player_2": game.user_black,
+        "board_size": board.size,
+    }
+    template = loader.get_template("game/game.html")
+    return HttpResponse(template.render(context, request))
 
+
+def board_state(request, board_id):
+    if not Board.objects.filter(id=board_id).exists():
+        return JsonResponse(
+            APIResponse(
+                ok=False, code="BOARD_NOT_FOUND", message="Board not found"
+            ).model_dump(),
+            status=404,
+        )
+
+    board = Board.objects.filter(id=board_id).first()
     moves = list(
-        Move.objects.filter(board=board)
+        Move.objects.filter(board=board, alive=True)
         .order_by("move_number")
         .values("x", "y", "color", "move_number")
     )
+
+    first_move = len(moves) == 0
+    if first_move:
+        next_color = "B"
+    else:
+        next_color = "B" if moves[-1]["color"] == "W" else "W"
+
+    game = models.Game(
+        board=models.Board(size=board.size),
+        moves=[models.Move(**move) for move in moves],
+    )
+    current_game_state, captured_stones = capture.Capture.remove_captured_stones(game)
+    assert isinstance(current_game_state, models.Game)
+    assert all(isinstance(m, models.Move) for m in captured_stones)
+
+    if len(captured_stones) > 0:
+        moves = [m.model_dump() for m in current_game_state.moves]
+        Move.objects.filter(
+            board=board,
+            x__in=[m.x for m in captured_stones],
+            y__in=[m.y for m in captured_stones],
+        ).update(alive=False)
 
     return JsonResponse(
         APIResponse(
@@ -63,7 +100,7 @@ def board_state(request, board_id):
 
 @require_http_methods(["POST"])
 def place_stone(request, board_id, x, y, color):
-    color = StoneColor(color)
+    color = models.StoneColor(color)
     board = Board.objects.select_for_update().get(id=board_id)
 
     if not (0 <= x < board.size and 0 <= y < board.size):
@@ -76,7 +113,7 @@ def place_stone(request, board_id, x, y, color):
             status=400,
         )
 
-    if Move.objects.filter(board=board, x=x, y=y).exists():
+    if Move.objects.filter(board=board, x=x, y=y, alive=True).exists():
         return JsonResponse(
             APIResponse(
                 ok=False,

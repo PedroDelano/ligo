@@ -22,12 +22,13 @@ class Move(models.Model):
     x = models.IntegerField()
     y = models.IntegerField()
     color = models.CharField(max_length=1, choices=[("B", "Black"), ("W", "White")])
+    alive = models.BooleanField(default=True)
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(
-                fields=["board", "x", "y"], name="uniq_move_per_intersection"
-            ),
+            # models.UniqueConstraint(
+            #     fields=["board", "x", "y", "alive"], name="uniq_move_per_intersection"
+            # ),
             models.UniqueConstraint(
                 fields=["board", "move_number"], name="uniq_move_number_per_board"
             ),

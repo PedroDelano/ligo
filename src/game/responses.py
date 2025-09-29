@@ -4,11 +4,6 @@ from typing import Any, Optional
 from pydantic import BaseModel
 
 
-class StoneColor(StrEnum):
-    BLACK = "B"
-    WHITE = "W"
-
-
 class ErrorCode(StrEnum):
     OUT_OF_BOUNDS = "OUT_OF_BOUNDS"
     NOT_YOUR_TURN = "NOT_YOUR_TURN"

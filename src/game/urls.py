@@ -15,4 +15,5 @@ urlpatterns = [
         name="place_stone",
     ),
     path("board/<int:board_id>/", views.board_state, name="board_state"),
+    path("<int:game_id>/", views.get_game, name="get_game"),
 ]

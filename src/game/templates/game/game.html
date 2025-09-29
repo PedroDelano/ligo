@@ -1,0 +1,21 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>LiGo</title>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>{{ player_1 }} vs {{ player_2 }}: {{ board_id }}</h1>
+      <div id="meta" data-board-id="{{ board_id }}"></div>
+      <canvas id="board" width="620" height="620" aria-label="Go board"></canvas>
+      <div class="controls">
+        <span id="turn">Turn: Black ●</span>
+      </div>
+      <p id="msg"></p>
+    </div>
+    <link rel="stylesheet" href="{% static 'game/style.css' %}" />
+    <script src="{% static 'game/script.js' %}"></script>
+  </body>
+</html>
