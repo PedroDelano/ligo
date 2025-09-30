@@ -32,13 +32,20 @@
       </p>
 
       <div class="go-row mt-3">
-        <label for="board-size">Choose board size:</label>
-        <select id="board-size">
-          <option value="9">9x9</option>
-          <option value="13">13x13</option>
-          <option value="19" selected>19x19</option>
-        </select>
-        <button type="button" onclick="startGame()">Start New Game</button>
+        <form id="queue-form" action="{% url 'player_queue:add' %}" method="post" class="go-row">
+          {% csrf_token %}
+          <label for="board-size">Choose board size:</label>
+          <select id="board-size" name="board_size">
+            <option value="9">9x9</option>
+            <option value="13">13x13</option>
+            <option value="19" selected>19x19</option>
+          </select>
+
+          <!-- You can let the view default to username, but sending it is fine -->
+          <input type="hidden" name="player_name" value="{{ user.username }}" />
+
+          <button type="submit" class="stone-white">Find me a match</button>
+        </form>
       </div>
 
       <div class="go-footer">Tip: 19x19 is the full board, 9x9 is great for quick games.</div>

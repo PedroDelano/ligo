@@ -1,6 +1,6 @@
+from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.template import loader
-from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 
 from .models import Board, Game, LastMoveCache, Move
@@ -13,24 +13,14 @@ def index(request):
     return HttpResponse(template.render({}, request))
 
 
-@ensure_csrf_cookie
 def new_game(request, player1, player2, board_size):
     assert isinstance(player1, str)
     assert isinstance(player2, str)
     assert isinstance(board_size, int)
     assert board_size in models.VALID_BOARD_SIZES
     game = Game.objects.create(user_white=player1, user_black=player2)
-    board = Board.objects.create(game=game, size=board_size)
-    context = {
-        "game_id": game.id,
-        "board_id": board.id,
-        "player_1": player1,
-        "player_2": player2,
-        "board_size": board_size,
-    }
-    template = loader.get_template("game/game.html")
-    print(f"New game created: {context}")
-    return HttpResponse(template.render(context, request))
+    _ = Board.objects.create(game=game, size=board_size)
+    return JsonResponse(APIResponse(data={"game_id": game.id}).model_dump())
 
 
 def get_game(request, game_id):
@@ -99,6 +89,7 @@ def board_state(request, board_id):
 
 
 @require_http_methods(["POST"])
+@transaction.atomic
 def place_stone(request, board_id, x, y, color):
     color = models.StoneColor(color)
     board = Board.objects.select_for_update().get(id=board_id)

@@ -13,7 +13,7 @@ class CustomLoginView(LoginView):
 class SignUpView(FormView):
     template_name = "registration/signup.html"
     form_class = PublicSignUpForm
-    success_url = reverse_lazy("game:index")
+    success_url = reverse_lazy("home:index")
 
     def form_valid(self, form):
         user = form.save()
@@ -22,4 +22,4 @@ class SignUpView(FormView):
 
 
 class CustomLogoutView(LogoutView):
-    next_page = reverse_lazy("main_page:index")
+    next_page = reverse_lazy("home:index")

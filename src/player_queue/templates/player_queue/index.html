@@ -1,0 +1,7 @@
+{% load static %}
+<link rel="stylesheet" href="{% static 'player_queue/queue.css' %}" />
+
+<div class="queue-wrap">
+  <div class="stone spinner" aria-busy="true" aria-live="polite"></div>
+  <p>{{ message|default:'You have been added to the queue. Waiting for a match...' }}</p>
+</div>

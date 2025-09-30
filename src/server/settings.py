@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "game.apps.GameConfig",
     "accounts.apps.AccountsConfig",
     "main_page.apps.MainPageConfig",
+    "player_queue.apps.PlayerQueueConfig",
 ]
 
 MIDDLEWARE = [
