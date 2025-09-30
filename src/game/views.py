@@ -136,6 +136,31 @@ def place_stone(request, board_id, x, y, color):
             status=400,
         )
 
+    # Check for suicide moves
+    moves = list(
+        Move.objects.filter(board=board, alive=True)
+        .order_by("move_number")
+        .values("x", "y", "color", "move_number")
+    )
+    moves.append(
+        models.Move(x=x, y=y, color=color, move_number=len(moves)).model_dump()
+    )
+    game = models.Game(
+        board=models.Board(size=board.size),
+        moves=[models.Move(**move) for move in moves],
+    )
+    _, captured_stones = capture.Capture.remove_captured_stones(
+        game, last_played_color="W" if color == "B" else "B"
+    )
+
+    if len(captured_stones) > 0:
+        return JsonResponse(
+            APIResponse(
+                ok=False, code="INVALID_MOVE", message="Invalid move: suicide move"
+            ).model_dump(),
+            status=400,
+        )
+
     next_num = 1 if last is None else last.get("move__move_number") + 1
 
     # Inserts after validation

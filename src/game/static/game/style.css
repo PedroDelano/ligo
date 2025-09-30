@@ -10,9 +10,23 @@ body {
     color: #222;
 }
 
+@media (max-width: 640px) {
+    body {
+        padding: 16px 8px;
+    }
+}
+
 .wrap {
     max-width: 680px;
     margin: 0 auto;
+    width: 100%;
+    padding: 0 16px;
+}
+
+@media (max-width: 640px) {
+    .wrap {
+        padding: 0 8px;
+    }
 }
 
 h1 {
@@ -25,9 +39,12 @@ h1 {
     background: #d6b26b;
     /* light wood */
     display: block;
+    margin: 0 auto;
     border-radius: 8px;
     box-shadow: 0 6px 20px rgba(0, 0, 0, .12), inset 0 0 0 1px rgba(0, 0, 0, .08);
     cursor: crosshair;
+    max-width: 100%;
+    height: auto;
 }
 
 .controls {

@@ -4,31 +4,49 @@ for (let i = 0; i < SIZE; i++) board.push(Array(SIZE).fill(0));
 let turn = 1;                  // 1 black, 2 white
 let READY = false;
 
-const CELL = 30;           // px between lines
+let CELL = 30;           // px between lines (will be calculated)
 const PADDING = 20;        // outer margin
-const W = PADDING * 2 + CELL * (SIZE - 1);
-const H = W;
+
 const meta = document.getElementById("meta");
 const BOARD_ID = Number(meta.dataset.boardId);
 const canvas = document.getElementById("board");
 const ctx = canvas.getContext("2d");
 const dpr = Math.max(1, window.devicePixelRatio || 1);
-canvas.style.width = W + "px";
-canvas.style.height = H + "px";
-canvas.width = Math.round(W * dpr);
-canvas.height = Math.round(H * dpr);
-ctx.scale(dpr, dpr);
+
 let hover = { i: null, j: null, valid: false };
 const CSRF_TOKEN = (() => {
     const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
     return m ? decodeURIComponent(m[1]) : "";
 })();
 
+// Calculate optimal cell size based on container width
+function calculateCellSize() {
+    const container = document.querySelector('.wrap');
+    const maxWidth = Math.min(container.clientWidth - 48, 620); // 48px for padding, max 620
+    const availableSpace = maxWidth - (PADDING * 2);
+    CELL = Math.floor(availableSpace / (SIZE - 1));
+    return CELL;
+}
 
-// function getCsrfToken() {
-//     const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
-//     return m ? decodeURIComponent(m[1]) : "";
-// }
+// Helper functions to get dynamic dimensions
+function getW() {
+    return PADDING * 2 + CELL * (SIZE - 1);
+}
+
+function getH() {
+    return getW();
+}
+
+function updateCanvasSize() {
+    calculateCellSize(); // Recalculate cell size based on container
+    const W = getW();
+    const H = getH();
+    canvas.style.width = W + "px";
+    canvas.style.height = H + "px";
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    ctx.scale(dpr, dpr);
+}
 
 async function loadBoard() {
     const res = await fetch(`/game/board/${BOARD_ID}/`, {
@@ -43,6 +61,9 @@ async function loadBoard() {
     board.length = 0;
     for (let i = 0; i < SIZE; i++) board.push(Array(SIZE).fill(0));
 
+    // Update canvas size based on new SIZE
+    updateCanvasSize();
+
     const moves = Array.isArray(payload.moves) ? payload.moves : [];
     if (!payload.first_move && moves.length) {
         for (const mv of moves) {
@@ -54,8 +75,8 @@ async function loadBoard() {
     updateTurnLabel();
     READY = true;
     render();
+    clearMsg();
 }
-
 
 async function sendMove(i, j) {
     const colorChar = (turn === 1 ? "B" : "W");
@@ -96,6 +117,9 @@ const pxToCoord = (x, y) => {
 };
 
 function drawBoard() {
+    const W = getW();
+    const H = getH();
+
     // background wood grain hint
     ctx.clearRect(0, 0, W, H);
 
@@ -122,6 +146,30 @@ function drawBoard() {
     // star points for 19x19
     if (SIZE === 19) {
         const stars = [3, 9, 15];
+        ctx.fillStyle = "#443014";
+        for (const i of stars) {
+            for (const j of stars) {
+                const { x, y } = coordToPx(i, j);
+                ctx.beginPath();
+                ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+    } else if (SIZE === 13) {
+        // star points for 13x13 (3-3, 3-9, 9-3, 9-9, and center at 6-6)
+        const stars = [3, 6, 9];
+        ctx.fillStyle = "#443014";
+        for (const i of stars) {
+            for (const j of stars) {
+                const { x, y } = coordToPx(i, j);
+                ctx.beginPath();
+                ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+    } else if (SIZE === 9) {
+        // star points for 9x9 (2-2, 2-6, 6-2, 6-6, and center at 4-4)
+        const stars = [2, 4, 6];
         ctx.fillStyle = "#443014";
         for (const i of stars) {
             for (const j of stars) {
@@ -213,13 +261,8 @@ canvas.addEventListener("click", async (e) => {
     if (!valid) return;
     if (board[i][j] !== 0) return showMsg("Position occupied");
 
-    board[i][j] = turn;
-    updateTurnLabel();
-    render();
-
     try {
         await sendMove(i, j);
-        clearMsg();
     } catch {
         showMsg("Network error");
     }
@@ -230,5 +273,16 @@ function updateTurnLabel() {
     el.textContent = `Turn: ${turn === 1 ? "Black ●" : "White ○"}`;
 }
 
-// Call this once after setting up canvas and drawing helpers:
+// Initialize canvas size and load board
+updateCanvasSize();
 loadBoard();
+
+// Handle window resize
+let resizeTimeout;
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+        updateCanvasSize();
+        render();
+    }, 150);
+});
