@@ -153,7 +153,7 @@ def place_stone(request, board_id, x, y, color):
         game, last_played_color="W" if color == "B" else "B"
     )
 
-    if moves[-1] in captured_stones:
+    if models.Move(**moves[-1]) in captured_stones:
         return JsonResponse(
             APIResponse(
                 ok=False, code="INVALID_MOVE", message="Invalid move: suicide move"
