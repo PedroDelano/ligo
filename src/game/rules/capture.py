@@ -66,9 +66,11 @@ class Capture:
         assert all(isinstance(m, Move) for m in captured_stones)
         return Game(board=game.board, moves=current_move_state), captured_stones
 
-    def mark_captured(board: BoardDB, stones: List[Move]) -> MoveDB:
+    def mark_captured(board: BoardDB, stones: List[Move]) -> int:
         assert isinstance(board, BoardDB)
         assert all(isinstance(s, Move) for s in stones)
+        if not stones:
+            return 0
         q = Q()
         for s in stones:
             q |= Q(x=s.x, y=s.y)

@@ -291,6 +291,13 @@ def place_stone(request, board_id, x, y):
             ).model_dump(),
             status=400,
         )
+    if last is None and color != models.StoneColor.BLACK:
+        return JsonResponse(
+            APIResponse(
+                ok=False, code="NOT_YOUR_TURN", message="Invalid move: not your turn"
+            ).model_dump(),
+            status=400,
+        )
 
     moves = list(
         Move.objects.filter(board=board, alive=True)
