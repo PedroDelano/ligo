@@ -1,4 +1,14 @@
+from enum import Enum
+
 from django.db import models
+
+
+class GAME_STATUS(Enum):
+    ONGOING = "ONGOING"
+    WHITE_WON = "WHITE_WON"
+    BLACK_WON = "BLACK_WON"
+    DRAW = "DRAW"
+    ABORTED = "ABORTED"
 
 
 class Game(models.Model):
@@ -6,6 +16,11 @@ class Game(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     user_white = models.CharField(max_length=100)
     user_black = models.CharField(max_length=100)
+    status = models.CharField(
+        max_length=20,
+        choices=[(tag.value, tag.name) for tag in GAME_STATUS],
+        default=GAME_STATUS.ONGOING.value,
+    )
 
 
 class Board(models.Model):

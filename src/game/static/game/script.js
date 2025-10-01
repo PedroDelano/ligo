@@ -67,6 +67,7 @@ async function loadBoard() {
     const moves = Array.isArray(payload.moves) ? payload.moves : [];
     if (!payload.first_move && moves.length) {
         for (const mv of moves) {
+            if (mv.x == -1 && mv.y == -1) continue; // pass move
             const color = mv.color === "B" ? 1 : 2;
             board[mv.x][mv.y] = color;
         }
@@ -80,7 +81,7 @@ async function loadBoard() {
 
 async function sendMove(i, j) {
     const colorChar = (turn === 1 ? "B" : "W");
-    const res = await fetch(`/game/place/${BOARD_ID}/${i}/${j}/${colorChar}/`, {
+    const res = await fetch(`/game/place/${BOARD_ID}/${i}/${j}/`, {
         method: "POST",
         credentials: "same-origin",
         headers: { "X-CSRFToken": CSRF_TOKEN }
@@ -185,6 +186,10 @@ function drawBoard() {
 function drawStone(i, j, color, alpha = 1) {
     const { x, y } = coordToPx(i, j);
     const r = Math.floor(CELL * 0.44);
+
+    // the move was passed
+    if (x == -1 || y == -1) return;
+
     ctx.save();
     ctx.globalAlpha = alpha;
 
@@ -235,6 +240,30 @@ function render() {
     }
 }
 
+async function sendPass() {
+    const btn = document.getElementById("pass");
+    btn.disabled = true;
+    showMsg("Passing turn…");
+    try {
+        const res = await fetch(`/game/pass/${BOARD_ID}`, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "X-CSRFToken": CSRF_TOKEN }
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok || payload.error) {
+            showMsg(payload.message || "Pass rejected");
+            return;
+        }
+        await loadBoard();       // refresh size/turn/moves
+        clearMsg();              // or showMsg("You passed.");
+    } catch {
+        showMsg("Network error");
+    } finally {
+        btn.disabled = false;
+    }
+}
+
 // Events
 function getMousePos(evt) {
     const rect = canvas.getBoundingClientRect();
@@ -276,6 +305,8 @@ function updateTurnLabel() {
 // Initialize canvas size and load board
 updateCanvasSize();
 loadBoard();
+// setInterval(() => { loadBoard().catch(() => { }); }, 1200);
+document.getElementById("pass").addEventListener("click", sendPass);
 
 // Handle window resize
 let resizeTimeout;

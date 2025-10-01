@@ -3,7 +3,7 @@ from django.http import HttpResponse, JsonResponse
 from django.template import loader
 from django.views.decorators.http import require_http_methods
 
-from .models import Board, Game, LastMoveCache, Move
+from .models import GAME_STATUS, Board, Game, LastMoveCache, Move
 from .responses import APIResponse
 from .rules import capture, models
 
@@ -90,9 +90,154 @@ def board_state(request, board_id):
 
 @require_http_methods(["POST"])
 @transaction.atomic
-def place_stone(request, board_id, x, y, color):
-    color = models.StoneColor(color)
+def pass_turn(request, board_id):
+    if not request.user.is_authenticated:
+        return JsonResponse(
+            APIResponse(
+                ok=False, code="UNAUTHORIZED", message="User not authenticated"
+            ).model_dump(),
+            status=401,
+        )
+
     board = Board.objects.select_for_update().get(id=board_id)
+    if not board:
+        return JsonResponse(
+            APIResponse(
+                ok=False, code="BOARD_NOT_FOUND", message="Board not found"
+            ).model_dump(),
+            status=404,
+        )
+
+    game = Game.objects.select_for_update().get(id=board.game_id)
+    if not game:
+        return JsonResponse(
+            APIResponse(
+                ok=False, code="GAME_NOT_FOUND", message="Game not found"
+            ).model_dump(),
+            status=404,
+        )
+
+    if game.status != GAME_STATUS.ONGOING.value:
+        return JsonResponse(
+            APIResponse(
+                ok=False,
+                code="GAME_ENDED",
+                message="Cannot pass turn: Game was ended",
+            ).model_dump(),
+            status=400,
+        )
+
+    if request.user.username not in [game.user_white, game.user_black]:
+        return JsonResponse(
+            APIResponse(
+                ok=False,
+                code="FORBIDDEN",
+                message="User not part of this game",
+            ).model_dump(),
+            status=403,
+        )
+
+    last = (
+        LastMoveCache.objects.select_related("move")
+        .filter(board=board)
+        .values("move__color", "move__move_number", "move__x", "move__y")
+        .first()
+    )
+
+    # Stone color is authoritatively determined by the user making the request
+    color = (
+        models.StoneColor.BLACK
+        if request.user.username == game.user_black
+        else models.StoneColor.WHITE
+    )
+
+    if last is not None and last.get("move__color") == color.value:
+        return JsonResponse(
+            APIResponse(
+                ok=False, code="NOT_YOUR_TURN", message="Invalid move: not your turn"
+            ).model_dump(),
+            status=400,
+        )
+
+    # Check if last move was also a pass
+    if last is not None and last.get("move__x") == -1 and last.get("move__y") == -1:
+        # TODO: Define scoring
+        game.status = (
+            GAME_STATUS.BLACK_WON.value
+            if color == models.StoneColor.WHITE
+            else GAME_STATUS.WHITE_WON.value
+        )
+        game.save()
+        return JsonResponse(
+            APIResponse(
+                ok=True,
+                code="GAME_ENDED",
+                message=f"Game ended. {'Black' if game.status == GAME_STATUS.BLACK_WON.value else 'White'} won.",
+                data={"game_status": game.status},
+            ).model_dump()
+        )
+
+    next_num = 1 if last is None else last.get("move__move_number") + 1
+
+    # Inserts after validation
+    m = Move.objects.create(
+        board=board, move_number=next_num, x=-1, y=-1, color=color.value, alive=True
+    )
+    LastMoveCache.objects.update_or_create(
+        board=board,
+        defaults={"move_id": m.id},
+    )
+    return JsonResponse(APIResponse(data={"move_number": next_num}).model_dump())
+
+
+@require_http_methods(["POST"])
+@transaction.atomic
+def place_stone(request, board_id, x, y):
+    if not request.user.is_authenticated:
+        return JsonResponse(
+            APIResponse(
+                ok=False, code="UNAUTHORIZED", message="User not authenticated"
+            ).model_dump(),
+            status=401,
+        )
+
+    board = Board.objects.select_for_update().get(id=board_id)
+    if not board:
+        return JsonResponse(
+            APIResponse(
+                ok=False, code="BOARD_NOT_FOUND", message="Board not found"
+            ).model_dump(),
+            status=404,
+        )
+
+    game = Game.objects.select_for_update().get(id=board.game_id)
+    if not game:
+        return JsonResponse(
+            APIResponse(
+                ok=False, code="GAME_NOT_FOUND", message="Game not found"
+            ).model_dump(),
+            status=404,
+        )
+
+    if game.status != GAME_STATUS.ONGOING.value:
+        return JsonResponse(
+            APIResponse(
+                ok=False,
+                code="GAME_ENDED",
+                message="Cannot place stone: game was ended",
+            ).model_dump(),
+            status=400,
+        )
+
+    if request.user.username not in [game.user_white, game.user_black]:
+        return JsonResponse(
+            APIResponse(
+                ok=False,
+                code="FORBIDDEN",
+                message="User not part of this game",
+            ).model_dump(),
+            status=403,
+        )
 
     if not (0 <= x < board.size and 0 <= y < board.size):
         return JsonResponse(
@@ -119,6 +264,14 @@ def place_stone(request, board_id, x, y, color):
         .values("move__color", "move__move_number")
         .first()
     )
+
+    # Stone color is authoritatively determined by the user making the request
+    color = (
+        models.StoneColor.BLACK
+        if request.user.username == game.user_black
+        else models.StoneColor.WHITE
+    )
+
     if last is not None and last.get("move__color") == color.value:
         return JsonResponse(
             APIResponse(
@@ -127,7 +280,6 @@ def place_stone(request, board_id, x, y, color):
             status=400,
         )
 
-    # Check for suicide moves
     moves = list(
         Move.objects.filter(board=board, alive=True)
         .order_by("move_number")

@@ -5,7 +5,7 @@ from django.template import loader
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
-from game.models import Board, Game
+from game.models import GAME_STATUS, Board, Game
 
 from .models import PlayerQueue, PlayerRating
 
@@ -17,6 +17,7 @@ def create_game(player1, player2, board_size):
 
 
 @require_http_methods(["POST"])
+@transaction.atomic
 def add_player_to_queue(request):
     template = loader.get_template("player_queue/index.html")
     user = request.user
@@ -25,8 +26,12 @@ def add_player_to_queue(request):
 
     # Check if player is in a game
     ongoing_game = (
-        Game.objects.filter(user_white=user.username).exists()
-        or Game.objects.filter(user_black=user.username).exists()
+        Game.objects.filter(
+            user_white=user.username, status=GAME_STATUS.ONGOING
+        ).exists()
+        or Game.objects.filter(
+            user_black=user.username, status=GAME_STATUS.ONGOING
+        ).exists()
     )
     if ongoing_game:
         game_id = (
@@ -71,38 +76,36 @@ def add_player_to_queue(request):
             pq.skill_level = user_skill
             pq.save(update_fields=["player_name", "board_size", "skill_level"])
 
-    # Try to find a match atomically and prevent double-matching
-    with transaction.atomic():
-        me_locked = (
-            PlayerQueue.objects.select_for_update()
-            .filter(user=user, board_size=board_size)
-            .first()
-        )
-        if not me_locked:
-            return redirect("player_queue:index")
+    me_locked = (
+        PlayerQueue.objects.select_for_update()
+        .filter(user=user, board_size=board_size)
+        .first()
+    )
+    if not me_locked:
+        return redirect("player_queue:index")
 
-        low = user_skill - 100
-        high = user_skill + 100
+    low = user_skill - 100
+    high = user_skill + 100
 
-        # Lock a compatible opponent; skip rows already locked by another txn
-        opponent = (
-            PlayerQueue.objects.select_for_update(skip_locked=True)
-            .filter(board_size=board_size)
-            .exclude(user=user)
-            .filter(skill_level__gte=low, skill_level__lte=high)
-            .order_by("created_at")
-            .first()
-        )
+    # Lock a compatible opponent; skip rows already locked by another txn
+    opponent = (
+        PlayerQueue.objects.select_for_update(skip_locked=True)
+        .filter(board_size=board_size)
+        .exclude(user=user)
+        .filter(skill_level__gte=low, skill_level__lte=high)
+        .order_by("created_at")
+        .first()
+    )
 
-        if not opponent:
-            context = {
-                "message": "You have been added to the queue. Waiting for a match..."
-            }
-            return HttpResponse(template.render(context, request))
+    if not opponent:
+        context = {
+            "message": "You have been added to the queue. Waiting for a match..."
+        }
+        return HttpResponse(template.render(context, request))
 
-        opponent_user = opponent.user
-        opponent.delete()
-        me_locked.delete()
+    opponent_user = opponent.user
+    opponent.delete()
+    me_locked.delete()
 
     game_id = create_game(
         player1=user,
