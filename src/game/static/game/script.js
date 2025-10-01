@@ -92,7 +92,7 @@ async function sendMove(i, j) {
         showMsg(payload.message || "Move rejected");
         return;
     }
-    await loadBoard();
+    // await loadBoard();
     clearMsg();
 }
 
@@ -255,7 +255,7 @@ async function sendPass() {
             showMsg(payload.message || "Pass rejected");
             return;
         }
-        await loadBoard();       // refresh size/turn/moves
+        // await loadBoard();       // refresh size/turn/moves
         clearMsg();              // or showMsg("You passed.");
     } catch {
         showMsg("Network error");
@@ -305,7 +305,6 @@ function updateTurnLabel() {
 // Initialize canvas size and load board
 updateCanvasSize();
 loadBoard();
-// setInterval(() => { loadBoard().catch(() => { }); }, 1200);
 document.getElementById("pass").addEventListener("click", sendPass);
 
 // Handle window resize
@@ -317,3 +316,47 @@ window.addEventListener('resize', () => {
         render();
     }, 150);
 });
+
+// --- Live updates via WebSocket ---
+(function () {
+    const scheme = location.protocol === "https:" ? "wss" : "ws";
+    const wsUrl = `${scheme}://${location.host}/ws/board/${BOARD_ID}/`;
+    let ws;
+    let backoff = 500; // ms (will double up to 5s)
+
+    function connect() {
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+            backoff = 500; // reset on successful connect
+            // console.debug("WS connected");
+        };
+
+        ws.onmessage = (e) => {
+            // We just refresh from the server (simple & robust):
+            // server can send {"event":"move"} or any payload; we don't rely on shape here
+            loadBoard().catch(() => { });
+        };
+
+        ws.onerror = () => {
+            // let onclose handle the retry
+            try { ws.close(); } catch { }
+        };
+
+        ws.onclose = () => {
+            // Reconnect with exponential backoff while tab is visible
+            if (document.visibilityState !== "hidden") {
+                setTimeout(connect, backoff);
+                backoff = Math.min(backoff * 2, 5000);
+            }
+        };
+    }
+
+    window.addEventListener("beforeunload", () => {
+        try {
+            if (ws && ws.readyState === WebSocket.OPEN) ws.close(1001);
+        } catch { }
+    });
+
+    connect();
+})();

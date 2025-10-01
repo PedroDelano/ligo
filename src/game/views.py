@@ -1,3 +1,5 @@
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.template import loader
@@ -6,6 +8,14 @@ from django.views.decorators.http import require_http_methods
 from .models import GAME_STATUS, Board, Game, LastMoveCache, Move
 from .responses import APIResponse
 from .rules import capture, models
+
+
+def notify_board_update(board, payload: dict):
+    channel_layer = get_channel_layer()
+    async_to_sync(channel_layer.group_send)(
+        f"board_{board.id}",
+        {"type": "board.update", "payload": payload},
+    )
 
 
 def index(request):
@@ -187,6 +197,8 @@ def pass_turn(request, board_id):
         board=board,
         defaults={"move_id": m.id},
     )
+    notify_board_update(board, {"type": "pass"})
+
     return JsonResponse(APIResponse(data={"move_number": next_num}).model_dump())
 
 
@@ -315,4 +327,5 @@ def place_stone(request, board_id, x, y):
         defaults={"move_id": m.id},
     )
 
+    notify_board_update(board, {"type": "move"})
     return JsonResponse(APIResponse(data={"move_number": next_num}).model_dump())
