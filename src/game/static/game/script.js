@@ -5,10 +5,11 @@ let turn = 1;                  // 1 black, 2 white
 let READY = false;
 
 let CELL = 30;           // px between lines (will be calculated)
-const PADDING = 20;        // outer margin
+const PADDING = 20;      // outer margin
 
 const meta = document.getElementById("meta");
 const BOARD_ID = Number(meta.dataset.boardId);
+const USER_COLOR = meta.dataset.userColor;
 const canvas = document.getElementById("board");
 const ctx = canvas.getContext("2d");
 const dpr = Math.max(1, window.devicePixelRatio || 1);
@@ -19,12 +20,25 @@ const CSRF_TOKEN = (() => {
     return m ? decodeURIComponent(m[1]) : "";
 })();
 
-// Calculate optimal cell size based on container width
+// Calculate optimal cell size based on available container space
 function calculateCellSize() {
-    const container = document.querySelector('.wrap');
-    const maxWidth = Math.min(container.clientWidth - 48, 620); // 48px for padding, max 620
-    const availableSpace = maxWidth - (PADDING * 2);
-    CELL = Math.floor(availableSpace / (SIZE - 1));
+    const container = document.querySelector('.board-container');
+    if (!container) return 30;
+
+    // Get container dimensions accounting for padding
+    const containerWidth = container.clientWidth - 40;  // 20px padding on each side
+    const containerHeight = container.clientHeight - 40;
+
+    // Use the smaller dimension to ensure board fits
+    const availableSpace = Math.min(containerWidth, containerHeight);
+
+    // Calculate cell size based on board size
+    const totalPadding = PADDING * 2;
+    const cellSize = Math.floor((availableSpace - totalPadding) / (SIZE - 1));
+
+    // Ensure minimum readable size
+    CELL = Math.max(cellSize, 15);
+
     return CELL;
 }
 
@@ -38,7 +52,7 @@ function getH() {
 }
 
 function updateCanvasSize() {
-    calculateCellSize(); // Recalculate cell size based on container
+    calculateCellSize();
     const W = getW();
     const H = getH();
     canvas.style.width = W + "px";
@@ -80,7 +94,6 @@ async function loadBoard() {
 }
 
 async function sendMove(i, j) {
-    const colorChar = (turn === 1 ? "B" : "W");
     const res = await fetch(`/game/place/${BOARD_ID}/${i}/${j}/`, {
         method: "POST",
         credentials: "same-origin",
@@ -92,7 +105,6 @@ async function sendMove(i, j) {
         showMsg(payload.message || "Move rejected");
         return;
     }
-    // await loadBoard();
     clearMsg();
 }
 
@@ -100,6 +112,7 @@ function showMsg(s) {
     const m = document.getElementById("msg");
     m.textContent = s;
 }
+
 function clearMsg() {
     const m = document.getElementById("msg");
     m.textContent = "";
@@ -121,14 +134,12 @@ function drawBoard() {
     const W = getW();
     const H = getH();
 
-    // background wood grain hint
+    // Clear and draw background
     ctx.clearRect(0, 0, W, H);
-
-    // subtle wood texture lines
     ctx.fillStyle = "#d6b26b";
     ctx.fillRect(0, 0, W, H);
 
-    // grid
+    // Draw grid
     ctx.strokeStyle = "#6f4d22";
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -144,33 +155,21 @@ function drawBoard() {
     }
     ctx.stroke();
 
-    // star points for 19x19
+    // Draw star points
+    drawStarPoints();
+}
+
+function drawStarPoints() {
+    let stars = [];
     if (SIZE === 19) {
-        const stars = [3, 9, 15];
-        ctx.fillStyle = "#443014";
-        for (const i of stars) {
-            for (const j of stars) {
-                const { x, y } = coordToPx(i, j);
-                ctx.beginPath();
-                ctx.arc(x, y, 2.5, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        }
+        stars = [3, 9, 15];
     } else if (SIZE === 13) {
-        // star points for 13x13 (3-3, 3-9, 9-3, 9-9, and center at 6-6)
-        const stars = [3, 6, 9];
-        ctx.fillStyle = "#443014";
-        for (const i of stars) {
-            for (const j of stars) {
-                const { x, y } = coordToPx(i, j);
-                ctx.beginPath();
-                ctx.arc(x, y, 2.5, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        }
+        stars = [3, 6, 9];
     } else if (SIZE === 9) {
-        // star points for 9x9 (2-2, 2-6, 6-2, 6-6, and center at 4-4)
-        const stars = [2, 4, 6];
+        stars = [2, 4, 6];
+    }
+
+    if (stars.length > 0) {
         ctx.fillStyle = "#443014";
         for (const i of stars) {
             for (const j of stars) {
@@ -187,26 +186,26 @@ function drawStone(i, j, color, alpha = 1) {
     const { x, y } = coordToPx(i, j);
     const r = Math.floor(CELL * 0.44);
 
-    // the move was passed
+    // skip if pass move
     if (x == -1 || y == -1) return;
 
     ctx.save();
     ctx.globalAlpha = alpha;
 
-    // stone base
+    // Draw stone
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.closePath();
 
     if (color === 1) {
-        // black stone with simple light
+        // Black stone with gradient
         const grad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
         grad.addColorStop(0, "#666");
         grad.addColorStop(1, "#111");
         ctx.fillStyle = grad;
         ctx.fill();
     } else {
-        // white stone with shadow ring
+        // White stone
         ctx.fillStyle = "#f7f7f7";
         ctx.fill();
         ctx.strokeStyle = "rgba(0,0,0,.2)";
@@ -214,7 +213,7 @@ function drawStone(i, j, color, alpha = 1) {
         ctx.stroke();
     }
 
-    // subtle drop shadow
+    // Draw subtle shadow
     ctx.globalAlpha = alpha * 0.3;
     ctx.beginPath();
     ctx.ellipse(x + 1, y + 2, r * 0.9, r * 0.6, 0, 0, Math.PI * 2);
@@ -227,14 +226,21 @@ function drawStone(i, j, color, alpha = 1) {
 function render() {
     if (!READY) return;
     drawBoard();
+
+    // Draw all placed stones
     for (let i = 0; i < SIZE; i++) {
         for (let j = 0; j < SIZE; j++) {
             const v = board[i][j];
             if (v !== 0) drawStone(i, j, v, 1);
         }
     }
+
+    // Draw hover preview only when it's user's turn
     if (hover.valid && hover.i !== null && hover.j !== null) {
-        if (board[hover.i][hover.j] === 0) {
+        const isUserTurn = (USER_COLOR === 'black' && turn === 1) ||
+            (USER_COLOR === 'white' && turn === 2);
+
+        if (isUserTurn && board[hover.i][hover.j] === 0) {
             drawStone(hover.i, hover.j, turn, 0.5);
         }
     }
@@ -255,8 +261,7 @@ async function sendPass() {
             showMsg(payload.message || "Pass rejected");
             return;
         }
-        // await loadBoard();       // refresh size/turn/moves
-        clearMsg();              // or showMsg("You passed.");
+        clearMsg();
     } catch {
         showMsg("Network error");
     } finally {
@@ -264,11 +269,13 @@ async function sendPass() {
     }
 }
 
-// Events
+// Event handlers
 function getMousePos(evt) {
     const rect = canvas.getBoundingClientRect();
-    const x = (evt.clientX - rect.left);
-    const y = (evt.clientY - rect.top);
+    const scaleX = canvas.width / dpr / rect.width;
+    const scaleY = canvas.height / dpr / rect.height;
+    const x = (evt.clientX - rect.left) * scaleX;
+    const y = (evt.clientY - rect.top) * scaleY;
     return { x, y };
 }
 
@@ -298,16 +305,34 @@ canvas.addEventListener("click", async (e) => {
 });
 
 function updateTurnLabel() {
-    const el = document.getElementById("turn");
-    el.textContent = `Turn: ${turn === 1 ? "Black ●" : "White ○"}`;
+    const el = document.getElementById("turn-text");
+    const stoneEl = document.getElementById("turn-stone");
+    const turnColor = turn === 1 ? "Black" : "White";
+
+    el.textContent = `Turn: ${turnColor}`;
+
+    // Update stone indicator
+    stoneEl.className = turn === 1 ? 'status-stone black-stone' : 'status-stone white-stone';
+
+    // Highlight when it's user's turn
+    const isUserTurn = (USER_COLOR === 'black' && turn === 1) ||
+        (USER_COLOR === 'white' && turn === 2);
+
+    if (isUserTurn) {
+        el.style.color = '#667eea';
+        el.style.fontWeight = '700';
+    } else {
+        el.style.color = '#2c3e50';
+        el.style.fontWeight = '600';
+    }
 }
 
-// Initialize canvas size and load board
+// Initialize
 updateCanvasSize();
 loadBoard();
 document.getElementById("pass").addEventListener("click", sendPass);
 
-// Handle window resize
+// Handle window resize with debouncing
 let resizeTimeout;
 window.addEventListener('resize', () => {
     clearTimeout(resizeTimeout);
@@ -317,34 +342,29 @@ window.addEventListener('resize', () => {
     }, 150);
 });
 
-// --- Live updates via WebSocket ---
+// WebSocket for live updates
 (function () {
     const scheme = location.protocol === "https:" ? "wss" : "ws";
     const wsUrl = `${scheme}://${location.host}/ws/board/${BOARD_ID}/`;
     let ws;
-    let backoff = 500; // ms (will double up to 5s)
+    let backoff = 500;
 
     function connect() {
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
-            backoff = 500; // reset on successful connect
-            // console.debug("WS connected");
+            backoff = 500;
         };
 
-        ws.onmessage = (e) => {
-            // We just refresh from the server (simple & robust):
-            // server can send {"event":"move"} or any payload; we don't rely on shape here
+        ws.onmessage = () => {
             loadBoard().catch(() => { });
         };
 
         ws.onerror = () => {
-            // let onclose handle the retry
             try { ws.close(); } catch { }
         };
 
         ws.onclose = () => {
-            // Reconnect with exponential backoff while tab is visible
             if (document.visibilityState !== "hidden") {
                 setTimeout(connect, backoff);
                 backoff = Math.min(backoff * 2, 5000);

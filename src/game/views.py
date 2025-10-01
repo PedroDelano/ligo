@@ -36,12 +36,23 @@ def new_game(request, player1, player2, board_size):
 def get_game(request, game_id):
     game = Game.objects.only("id", "user_white", "user_black").get(id=game_id)
     board = Board.objects.filter(game_id=game_id).only("id", "size").get()
+
+    # Who am I?
+    me = getattr(request.user, "username", None)
+    if me == game.user_black.username:
+        user_color = "black"
+    elif me == game.user_white.username:
+        user_color = "white"
+    else:
+        user_color = "black"
+
     context = {
         "game_id": game.id,
         "board_id": board.id,
-        "player_1": game.user_white,
-        "player_2": game.user_black,
+        "player_1": game.user_black.username,
+        "player_2": game.user_white.username,
         "board_size": board.size,
+        "user_color": user_color,
     }
     template = loader.get_template("game/game.html")
     return HttpResponse(template.render(context, request))

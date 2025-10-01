@@ -1,24 +1,162 @@
+/* Queue Screen Styles - Design consistent with Go game */
+
+/* Reset and Base */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
+    color: #1a1a1a;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+/* Queue Container */
 .queue-wrap {
-    display: grid;
-    place-items: center;
-    gap: 12px;
-    padding: 32px;
+    background: #fff;
+    border-radius: 12px;
+    padding: 60px 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 32px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, .1);
+    max-width: 500px;
+    width: 100%;
+    text-align: center;
+    animation: fadeIn .5s ease;
+    backface-visibility: hidden;
+    transform: translateZ(0);
+    -webkit-font-smoothing: antialiased;
 }
 
-.stone {
-    width: 32px;
-    height: 32px;
+/* Fixed Yin-Yang Spinner */
+.stone.spinner {
+    width: 80px;
+    height: 80px;
     border-radius: 50%;
-    box-shadow: inset 0 2px 6px rgba(0, 0, 0, .35);
+    position: relative;
+    /* left half black, right half white */
+    background: linear-gradient(90deg, #000 50%, #fff 50%);
+    border: 2px solid #333;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .2);
+    animation: yinYangSpin 3s linear infinite;
+    backface-visibility: hidden;
+    transform: translateZ(0);
+    will-change: transform;
+    overflow: hidden;
 }
 
-.spinner {
-    animation: spin 1.1s linear infinite;
-    background: radial-gradient(ellipse at 35% 35%, #333 20%, #111 60%, #000 100%);
+/* Top bulge: white with black dot */
+.stone.spinner::before,
+.stone.spinner::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 50%;
+    height: 50%;
+    border-radius: 50%;
 }
 
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
+/* Top half */
+.stone.spinner::before {
+    top: 0;
+    /* white circle with a black center dot */
+    background: radial-gradient(circle at 50% 50%, #000 20%, #fff 21%);
+}
+
+/* Bottom half */
+.stone.spinner::after {
+    bottom: 0;
+    /* black circle with a white center dot */
+    background: radial-gradient(circle at 50% 50%, #fff 20%, #000 21%);
+}
+
+/* Queue Message */
+.queue-wrap p {
+    font-size: 1.125rem;
+    font-weight: 400;
+    color: #1a1a1a;
+    line-height: 1.6;
+    letter-spacing: .02em;
+    max-width: 400px;
+}
+
+/* Yin-Yang Spin Animation */
+@keyframes yinYangSpin {
+    0% {
+        transform: translateZ(0) rotate(0deg);
     }
+
+    100% {
+        transform: translateZ(0) rotate(-360deg);
+    }
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+    .queue-wrap {
+        padding: 40px 30px;
+        gap: 24px;
+    }
+
+    .stone.spinner {
+        width: 60px;
+        height: 60px;
+    }
+
+    .queue-wrap p {
+        font-size: 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .queue-wrap {
+        padding: 30px 20px;
+    }
+
+    .stone.spinner {
+        width: 50px;
+        height: 50px;
+    }
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+    }
+
+    .stone.spinner {
+        animation: none;
+    }
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+    .queue-wrap {
+        border: 2px solid #1a1a1a;
+    }
+
+    .stone.spinner {
+        border: 2px solid #1a1a1a;
+    }
+}
+
+/* Hidden Meta Element */
+#queue-meta {
+    display: none;
 }

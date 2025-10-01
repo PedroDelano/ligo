@@ -3,20 +3,74 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>LiGo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LiGo - {{ player_1 }} vs {{ player_2 }}</title>
+    <link rel="stylesheet" href="{% static 'game/style.css' %}" />
   </head>
   <body>
-    <div class="wrap">
-      <h1>{{ player_1 }} vs {{ player_2 }}: {{ board_id }}</h1>
-      <div id="meta" data-board-id="{{ board_id }}"></div>
-      <canvas id="board" width="620" height="620" aria-label="Go board"></canvas>
-      <div class="controls">
-        <span id="turn">Turn: Black ●</span>
-        <button id="pass">Pass</button>
+    <div class="container">
+      <!-- Header with game info -->
+      <header class="game-header">
+        <div class="game-title">
+          <h1>LiGo</h1>
+          <span class="game-id">Game #{{ board_id }}</span>
+        </div>
+        <div class="yin-yang-divider">
+          <svg width="40" height="40" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="48" fill="none" stroke="#e0e0e0" stroke-width="2" />
+            <path d="M50 2 A48 48 0 0 1 50 98 A24 24 0 0 1 50 50 A24 24 0 0 0 50 2" fill="#1a1a1a" />
+            <circle cx="50" cy="26" r="8" fill="#fff" />
+            <circle cx="50" cy="74" r="8" fill="#1a1a1a" />
+          </svg>
+        </div>
+      </header>
+
+      <!-- Players info (left sidebar) -->
+      <div class="players-container">
+        <div class="player-card {% if user_color == 'black' %}player-active{% endif %}">
+          <div class="player-stone black-stone"></div>
+          <div class="player-info">
+            <span class="player-name">{{ player_1 }}</span>
+            {% if user_color == 'black' %}
+              <span class="you-badge">YOU</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="vs-divider">vs</div>
+
+        <div class="player-card {% if user_color == 'white' %}player-active{% endif %}">
+          <div class="player-stone white-stone"></div>
+          <div class="player-info">
+            <span class="player-name">{{ player_2 }}</span>
+            {% if user_color == 'white' %}
+              <span class="you-badge">YOU</span>
+            {% endif %}
+          </div>
+        </div>
       </div>
-      <p id="msg"></p>
+
+      <!-- Board (center) -->
+      <div class="board-container">
+        <canvas id="board" width="620" height="620" aria-label="Go board"></canvas>
+      </div>
+
+      <!-- Game status (right sidebar) -->
+      <div class="game-status">
+        <div class="turn-indicator">
+          <span id="turn-text">Turn: Black</span>
+          <div id="turn-stone" class="status-stone black-stone"></div>
+        </div>
+        <button id="pass" class="pass-button">Pass Turn</button>
+      </div>
+
+      <!-- Messages (bottom) -->
+      <div id="msg" class="message"></div>
+
+      <!-- Hidden metadata -->
+      <div id="meta" data-board-id="{{ board_id }}" data-user-color="{{ user_color }}" style="display: none;"></div>
     </div>
-    <link rel="stylesheet" href="{% static 'game/style.css' %}" />
+
     <script src="{% static 'game/script.js' %}"></script>
   </body>
 </html>
