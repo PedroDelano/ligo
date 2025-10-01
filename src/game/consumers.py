@@ -2,8 +2,9 @@ from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.contrib.auth.models import AnonymousUser
 
-from .models import Board
 from bot.models import BotGame
+
+from .models import Board
 
 
 def group_name(board_id: int) -> str:

@@ -1,5 +1,6 @@
 import random
 from typing import Optional, Tuple
+
 from .base import BotEngine
 
 

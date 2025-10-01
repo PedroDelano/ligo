@@ -5,14 +5,14 @@ from django.http import HttpResponse, JsonResponse
 from django.template import loader
 from django.views.decorators.http import require_http_methods
 
+from bot.services.bot_service import BotService
+from bot.tasks import trigger_bot_move
+
 from .controllers.finish_game import FinishGame
 from .controllers.move_validation import MoveValidation
 from .models import GAME_STATUS, Board, Game, LastMoveCache, Move
 from .responses import APIResponse
 from .rules import capture, models
-from bot.services.bot_service import BotService
-from bot.tasks import trigger_bot_move
-from bot.models import BotGame
 
 
 def notify_board_update(board, payload: dict):

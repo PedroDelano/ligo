@@ -1,12 +1,14 @@
-from game.models import Board, Move, LastMoveCache
-from bot.models import BotGame, BotPlayer
-from django.db import transaction
-from game.controllers.move_validation import MoveValidation
-from game.rules import capture, models as rule_models
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
 import random
 import time
+
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from django.db import transaction
+
+from bot.models import BotGame
+from game.models import Board, LastMoveCache, Move
+from game.rules import capture
+from game.rules import models as rule_models
 
 
 class BotService:

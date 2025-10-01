@@ -1,9 +1,10 @@
-from django.http import JsonResponse
-from django.db import transaction
 from django.contrib.auth import get_user_model
+from django.db import transaction
+from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
-from game.models import Game, Board
+
 from bot.models import BotGame, BotPlayer
+from game.models import Board, Game
 from game.responses import APIResponse
 
 User = get_user_model()
