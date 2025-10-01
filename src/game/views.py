@@ -68,6 +68,8 @@ def board_state(request, board_id):
         )
 
     board = Board.objects.filter(id=board_id).first()
+    game = Game.objects.filter(id=board.game_id).first()
+
     moves = list(
         Move.objects.filter(board=board, alive=True)
         .order_by("move_number")
@@ -82,12 +84,12 @@ def board_state(request, board_id):
         next_color = "B" if moves[-1]["color"] == "W" else "W"
         current_color = moves[-1]["color"]
 
-    game = models.Game(
+    game_model = models.Game(
         board=models.Board(size=board.size),
         moves=[models.Move(**move) for move in moves],
     )
     current_game_state, captured_stones = capture.Capture.remove_captured_stones(
-        game, last_played_color=current_color
+        game_model, last_played_color=current_color
     )
     assert isinstance(current_game_state, models.Game)
     assert all(isinstance(m, models.Move) for m in captured_stones)
@@ -95,6 +97,16 @@ def board_state(request, board_id):
     if len(captured_stones) > 0:
         moves = [m.model_dump() for m in current_game_state.moves]
         capture.Capture.mark_captured(board, captured_stones)
+
+    # Include game status and winner information
+    game_status = game.status if game else GAME_STATUS.ONGOING.value
+    game_ended = game_status != GAME_STATUS.ONGOING.value
+    winner = None
+    if game_ended:
+        if game_status == GAME_STATUS.BLACK_WON.value:
+            winner = "black"
+        elif game_status == GAME_STATUS.WHITE_WON.value:
+            winner = "white"
 
     return JsonResponse(
         APIResponse(
@@ -104,6 +116,9 @@ def board_state(request, board_id):
                 "moves": moves,
                 "next_color": next_color,
                 "first_move": first_move,
+                "game_ended": game_ended,
+                "game_status": game_status,
+                "winner": winner,
             }
         ).model_dump()
     )
@@ -189,12 +204,13 @@ def pass_turn(request, board_id):
             else GAME_STATUS.WHITE_WON.value
         )
         game.save()
+        notify_board_update(board, {"type": "game_ended"})
         return JsonResponse(
             APIResponse(
                 ok=True,
                 code="GAME_ENDED",
                 message=f"Game ended. {'Black' if game.status == GAME_STATUS.BLACK_WON.value else 'White'} won.",
-                data={"game_status": game.status},
+                data={"game_status": game.status, "game_ended": True},
             ).model_dump()
         )
 
@@ -318,12 +334,12 @@ def place_stone(request, board_id, x, y):
     moves.append(
         models.Move(x=x, y=y, color=color, move_number=len(moves)).model_dump()
     )
-    game = models.Game(
+    game_model = models.Game(
         board=models.Board(size=board.size),
         moves=[models.Move(**move) for move in moves],
     )
     _, captured_stones = capture.Capture.remove_captured_stones(
-        game, last_played_color="W" if color == "B" else "B"
+        game_model, last_played_color="W" if color == "B" else "B"
     )
 
     if models.Move(**moves[-1]) in captured_stones:

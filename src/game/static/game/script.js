@@ -3,6 +3,8 @@ const board = [];              // 0 empty, 1 black, 2 white
 for (let i = 0; i < SIZE; i++) board.push(Array(SIZE).fill(0));
 let turn = 1;                  // 1 black, 2 white
 let READY = false;
+let GAME_ENDED = false;        // Track if game has ended
+let WINNER = null;             // Track winner
 
 let CELL = 30;           // px between lines (will be calculated)
 const PADDING = 20;      // outer margin
@@ -87,13 +89,55 @@ async function loadBoard() {
         }
     }
     turn = payload.next_color === "B" ? 1 : 2;
+
+    // Update game ended state
+    GAME_ENDED = payload.game_ended || false;
+    WINNER = payload.winner || null;
+
     updateTurnLabel();
+    updateGameEndedUI();
     READY = true;
     render();
     clearMsg();
 }
 
+function updateGameEndedUI() {
+    const passButton = document.getElementById("pass");
+    const boardContainer = document.querySelector('.board-container');
+
+    if (GAME_ENDED) {
+        // Disable pass button
+        passButton.disabled = true;
+        passButton.textContent = "Game Ended";
+
+        // Add visual indicator to board
+        boardContainer.classList.add('game-ended');
+        canvas.style.cursor = 'not-allowed';
+
+        // Show winner message
+        const winnerText = WINNER === 'black' ? 'Black' : 'White';
+        showMsg(`Game Over - ${winnerText} wins!`, 'success');
+
+        // Update turn indicator to show winner
+        const turnText = document.getElementById("turn-text");
+        turnText.textContent = `Winner: ${winnerText}`;
+        turnText.style.color = '#10b981';
+        turnText.style.fontWeight = '700';
+    } else {
+        // Reset UI for ongoing game
+        passButton.disabled = false;
+        passButton.textContent = "Pass Turn";
+        boardContainer.classList.remove('game-ended');
+        canvas.style.cursor = 'crosshair';
+    }
+}
+
 async function sendMove(i, j) {
+    if (GAME_ENDED) {
+        showMsg("Game has ended - no more moves allowed");
+        return;
+    }
+
     const res = await fetch(`/game/place/${BOARD_ID}/${i}/${j}/`, {
         method: "POST",
         credentials: "same-origin",
@@ -108,14 +152,16 @@ async function sendMove(i, j) {
     clearMsg();
 }
 
-function showMsg(s) {
+function showMsg(s, type = 'info') {
     const m = document.getElementById("msg");
     m.textContent = s;
+    m.className = `message ${type}`;
 }
 
 function clearMsg() {
     const m = document.getElementById("msg");
     m.textContent = "";
+    m.className = "message";
 }
 
 const coordToPx = (i, j) => ({
@@ -157,6 +203,12 @@ function drawBoard() {
 
     // Draw star points
     drawStarPoints();
+
+    // Add opacity overlay if game ended
+    if (GAME_ENDED) {
+        ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
+        ctx.fillRect(0, 0, W, H);
+    }
 }
 
 function drawStarPoints() {
@@ -235,8 +287,8 @@ function render() {
         }
     }
 
-    // Draw hover preview only when it's user's turn
-    if (hover.valid && hover.i !== null && hover.j !== null) {
+    // Draw hover preview only when it's user's turn and game hasn't ended
+    if (!GAME_ENDED && hover.valid && hover.i !== null && hover.j !== null) {
         const isUserTurn = (USER_COLOR === 'black' && turn === 1) ||
             (USER_COLOR === 'white' && turn === 2);
 
@@ -247,6 +299,11 @@ function render() {
 }
 
 async function sendPass() {
+    if (GAME_ENDED) {
+        showMsg("Game has ended - cannot pass");
+        return;
+    }
+
     const btn = document.getElementById("pass");
     btn.disabled = true;
     showMsg("Passing turn…");
@@ -261,11 +318,20 @@ async function sendPass() {
             showMsg(payload.message || "Pass rejected");
             return;
         }
+
+        // Check if game ended
+        if (payload.data && payload.data.game_ended) {
+            GAME_ENDED = true;
+            updateGameEndedUI();
+        }
+
         clearMsg();
     } catch {
         showMsg("Network error");
     } finally {
-        btn.disabled = false;
+        if (!GAME_ENDED) {
+            btn.disabled = false;
+        }
     }
 }
 
@@ -280,6 +346,7 @@ function getMousePos(evt) {
 }
 
 canvas.addEventListener("mousemove", (e) => {
+    if (GAME_ENDED) return;
     const { x, y } = getMousePos(e);
     const hit = pxToCoord(x, y);
     hover = hit;
@@ -292,6 +359,11 @@ canvas.addEventListener("mouseleave", () => {
 });
 
 canvas.addEventListener("click", async (e) => {
+    if (GAME_ENDED) {
+        showMsg("Game has ended - no more moves allowed");
+        return;
+    }
+
     const { x, y } = getMousePos(e);
     const { i, j, valid } = pxToCoord(x, y);
     if (!valid) return;
@@ -307,8 +379,17 @@ canvas.addEventListener("click", async (e) => {
 function updateTurnLabel() {
     const el = document.getElementById("turn-text");
     const stoneEl = document.getElementById("turn-stone");
-    const turnColor = turn === 1 ? "Black" : "White";
 
+    if (GAME_ENDED) {
+        const winnerText = WINNER === 'black' ? 'Black' : 'White';
+        el.textContent = `Winner: ${winnerText}`;
+        stoneEl.className = WINNER === 'black' ? 'status-stone black-stone' : 'status-stone white-stone';
+        el.style.color = '#10b981';
+        el.style.fontWeight = '700';
+        return;
+    }
+
+    const turnColor = turn === 1 ? "Black" : "White";
     el.textContent = `Turn: ${turnColor}`;
 
     // Update stone indicator
