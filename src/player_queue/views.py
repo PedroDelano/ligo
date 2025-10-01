@@ -1,6 +1,6 @@
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import F, Q
+from django.db.models import Count, F, Q
 from django.db.models.functions import Abs
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import redirect
@@ -28,6 +28,25 @@ def create_game(player1, player2, board_size):
     game = Game.objects.create(user_white=player1, user_black=player2)
     _ = Board.objects.create(game=game, size=board_size)
     return game.id
+
+
+def get_queue_counts():
+    """
+    Returns a dictionary with the number of players waiting in queue for each board size.
+    Returns: dict like {9: 3, 13: 5, 19: 12}
+    """
+    counts = (
+        PlayerQueue.objects.values("board_size")
+        .annotate(count=Count("id"))
+        .order_by("board_size")
+    )
+
+    # Convert to dictionary and ensure all board sizes are present
+    result = {9: 0, 13: 0, 19: 0}
+    for item in counts:
+        result[item["board_size"]] = item["count"]
+
+    return result
 
 
 @require_http_methods(["POST"])

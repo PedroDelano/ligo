@@ -4,6 +4,7 @@
 
 <div class="go-card">
   <div class="go-inner">
+    <!-- Header -->
     <h1>
       <svg class="yy" viewBox="0 0 100 100" aria-hidden="true">
         <defs>
@@ -16,53 +17,200 @@
           <path d="M50,0 A50,50 0 0 1 50,100 A25,25 0 0 0 50,50 A25,25 0 0 1 50,0 Z" fill="white" />
         </g>
         <circle cx="50" cy="50" r="48" fill="none" stroke="currentColor" stroke-width="2" />
-      </svg>Welcome to LiGo
+      </svg>
+      Welcome to LiGo
     </h1>
 
     {% if user.is_authenticated %}
+      <!-- Welcome Message -->
       <p>Hello, {{ user.username }}! Nice seeing you here.</p>
 
-      <p>
-        <form action="{% url 'logout' %}" method="post" style="display:inline;">
-          {% csrf_token %}
-          <button type="submit" class="stone-white">Logout</button>
-        </form>
-      </p>
+      <!-- Navigation -->
+      <nav class="go-nav">
+        <button class="nav-item active" data-section="play">Play</button>
+        <button class="nav-item" data-section="profile">Profile</button>
+        <button class="nav-item" data-section="settings">Settings</button>
+      </nav>
 
-      <div class="go-row mt-3">
-        <form id="queue-form" action="{% url 'player_queue:add' %}" method="post" class="go-row">
-          {% csrf_token %}
-          <label for="board-size">Choose board size:</label>
-          {% with chosen=request.POST.board_size|default:"19" %}
-          <select id="board-size" name="board_size">
-            <option value="9"  {% if chosen == "9"  %}selected{% endif %}>9x9</option>
-            <option value="13" {% if chosen == "13" %}selected{% endif %}>13x13</option>
-            <option value="19" {% if chosen == "19" %}selected{% endif %}>19x19</option>
-          </select>
-          {% endwith %}
-          
+      <!-- Play Section -->
+      <div class="section-content active" id="play-section">
+        <h2 class="section-title">Find a Match</h2>
+        
+        <!-- Queue Status Display -->
+        {% if queue_counts %}
+        <div class="queue-status">
+          <h3 style="margin-bottom: 10px; font-size: 0.9em; color: #666;">Players waiting:</h3>
+          <div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 20px;">
+            <div class="queue-count-item">
+              <span class="board-label">9x9</span>
+              <span class="player-count">{{ queue_counts.9 }}</span>
+            </div>
+            <div class="queue-count-item">
+              <span class="board-label">13x13</span>
+              <span class="player-count">{{ queue_counts.13 }}</span>
+            </div>
+            <div class="queue-count-item">
+              <span class="board-label">19x19</span>
+              <span class="player-count">{{ queue_counts.19 }}</span>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+        
+        <div class="go-row">
+          <form id="queue-form" action="{% url 'player_queue:add' %}" method="post" class="go-row">
+            {% csrf_token %}
+            
+            <label for="board-size">Choose board size:</label>
+            
+            {% with chosen=request.POST.board_size|default:"19" %}
+            <select id="board-size" name="board_size">
+              <option value="9" {% if chosen == "9" %}selected{% endif %}>9x9</option>
+              <option value="13" {% if chosen == "13" %}selected{% endif %}>13x13</option>
+              <option value="19" {% if chosen == "19" %}selected{% endif %}>19x19</option>
+            </select>
+            {% endwith %}
+            
+            <input type="hidden" name="player_name" value="{{ user.username }}" />
+            
+            <button type="submit" class="stone-white">Find me a match</button>
+          </form>
+        </div>
 
-          <!-- You can let the view default to username, but sending it is fine -->
-          <input type="hidden" name="player_name" value="{{ user.username }}" />
-
-          <button type="submit" class="stone-white">Find me a match</button>
-        </form>
+        <div class="go-footer">Tip: 19x19 is the full board, 9x9 is great for quick games.</div>
       </div>
 
-      <div class="go-footer">Tip: 19x19 is the full board, 9x9 is great for quick games.</div>
+      <!-- Profile Section -->
+      <div class="section-content" id="profile-section">
+        <h2 class="section-title">Your Rating</h2>
+        
+        <div class="elo-section">
+          {% if current_rating %}
+            <p class="elo-current">Current ELO: {{ current_rating.skill_level }}</p>
+            <p class="elo-updated">Last updated: {{ current_rating.updated_at|date:"M d, Y H:i" }}</p>
+          {% else %}
+            <p>No rating yet. Play your first game to get rated!</p>
+          {% endif %}
 
-      <script>
-        function startGame() {
-          const size = document.getElementById("board-size").value;
-          const username = "{{ user.username }}";
-          window.location.href = `http://localhost:8000/game/new/${username}/alice/${size}/`;
-        }
-      </script>
+          {% if rating_history %}
+            <h3 class="elo-history-title">Rating History</h3>
+            <canvas id="eloChart" width="400" height="200"></canvas>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Settings Section -->
+      <div class="section-content" id="settings-section">
+        <h2 class="section-title">Settings</h2>
+        
+        <div class="settings-content">
+          <p>Account: <strong>{{ user.username }}</strong></p>
+          
+          <form action="{% url 'logout' %}" method="post" class="logout-form">
+            {% csrf_token %}
+            <button type="submit" class="stone-white">Logout</button>
+          </form>
+        </div>
+      </div>
+
     {% else %}
+      <!-- Login/Signup Prompt -->
       <p>
         <a href="{% url 'login' %}">Log in</a> or
-        <a href="{% url 'signup' %}">sign up</a> to start managing your links.
+        <a href="{% url 'signup' %}">sign up</a> to start playing.
       </p>
     {% endif %}
   </div>
 </div>
+
+<!-- Navigation JavaScript -->
+{% if user.is_authenticated %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const navItems = document.querySelectorAll('.nav-item');
+    const sections = document.querySelectorAll('.section-content');
+
+    navItems.forEach(item => {
+      item.addEventListener('click', function() {
+        const targetSection = this.getAttribute('data-section');
+
+        // Update active nav item
+        navItems.forEach(nav => nav.classList.remove('active'));
+        this.classList.add('active');
+
+        // Update visible section
+        sections.forEach(section => section.classList.remove('active'));
+        document.getElementById(targetSection + '-section').classList.add('active');
+      });
+    });
+  });
+</script>
+{% endif %}
+
+<!-- Chart.js Library -->
+{% if user.is_authenticated and rating_history %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('eloChart');
+    if (!ctx) return;
+    
+    const ratingData = [
+      {% for rating in rating_history %}
+      {
+        date: "{{ rating.updated_at|date:'Y-m-d H:i' }}",
+        elo: {{ rating.skill_level }}
+      }{% if not forloop.last %},{% endif %}
+      {% endfor %}
+    ];
+
+    new Chart(ctx.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: ratingData.map(r => r.date),
+        datasets: [{
+          label: 'ELO Rating',
+          data: ratingData.map(r => r.elo),
+          borderColor: 'rgb(75, 192, 192)',
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
+          tension: 0.1,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        scales: {
+          y: {
+            beginAtZero: false,
+            title: {
+              display: true,
+              text: 'Rating'
+            }
+          },
+          x: {
+            title: {
+              display: true,
+              text: 'Date'
+            },
+            ticks: {
+              maxRotation: 45,
+              minRotation: 45
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top'
+          },
+          tooltip: {
+            mode: 'index',
+            intersect: false
+          }
+        }
+      }
+    });
+  });
+</script>
+{% endif %}
