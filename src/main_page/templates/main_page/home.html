@@ -34,30 +34,73 @@
 
       <!-- Play Section -->
       <div class="section-content active" id="play-section">
-        <h2 class="section-title">Find a Match</h2>
+        <h2 class="section-title">Choose Your Game</h2>
         
-        <!-- Queue Status Display -->
-        {% if queue_counts %}
-        <div class="queue-status">
-          <h3 style="margin-bottom: 10px; font-size: 0.9em; color: #666;">Players waiting:</h3>
-          <div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 20px;">
-            <div class="queue-count-item">
-              <span class="board-label">9x9</span>
-              <span class="player-count">{{ queue_counts.9 }}</span>
-            </div>
-            <div class="queue-count-item">
-              <span class="board-label">13x13</span>
-              <span class="player-count">{{ queue_counts.13 }}</span>
-            </div>
-            <div class="queue-count-item">
-              <span class="board-label">19x19</span>
-              <span class="player-count">{{ queue_counts.19 }}</span>
+        <!-- Game Mode Selection -->
+        <div class="game-mode-selector">
+          <button class="mode-btn active" data-mode="bot">Play vs Bot</button>
+          <button class="mode-btn" data-mode="matchmaking">Find a Match</button>
+        </div>
+
+        <!-- Bot Game Mode -->
+        <div class="game-mode-content active" id="bot-mode">
+          <h3 style="margin-bottom: 15px; color: #2c3e50;">Configure Bot Game</h3>
+          
+          <form id="bot-form" method="post" class="go-row">
+            {% csrf_token %}
+            
+            <label for="bot-difficulty">Bot Difficulty:</label>
+            <select id="bot-difficulty" name="bot_difficulty">
+              <option value="random">Random - Complete beginner</option>
+              <option value="simple" selected>Simple - Casual play</option>
+              <option value="intermediate">Intermediate - Challenging</option>
+              <option value="advanced">Advanced - Very difficult</option>
+            </select>
+
+            <label for="bot-board-size">Board Size:</label>
+            <select id="bot-board-size" name="board_size">
+              <option value="9">9x9 - Quick game</option>
+              <option value="13">13x13 - Medium game</option>
+              <option value="19" selected>19x19 - Full board</option>
+            </select>
+
+            <label for="player-color">Your Color:</label>
+            <select id="player-color" name="player_color">
+              <option value="B" selected>Black (play first)</option>
+              <option value="W">White (play second)</option>
+            </select>
+
+            <button type="submit" class="stone-white">Start Bot Game</button>
+          </form>
+
+          <div class="go-footer">Tip: Start with Simple difficulty to learn the game.</div>
+        </div>
+
+        <!-- Matchmaking Mode -->
+        <div class="game-mode-content" id="matchmaking-mode">
+          <h3 style="margin-bottom: 15px; color: #2c3e50;">Join Matchmaking Queue</h3>
+          
+          <!-- Queue Status Display -->
+          {% if queue_counts %}
+          <div class="queue-status">
+            <h4 style="margin-bottom: 10px; font-size: 0.9em; color: #666;">Players waiting:</h4>
+            <div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 20px;">
+              <div class="queue-count-item">
+                <span class="board-label">9x9</span>
+                <span class="player-count">{{ queue_counts.9 }}</span>
+              </div>
+              <div class="queue-count-item">
+                <span class="board-label">13x13</span>
+                <span class="player-count">{{ queue_counts.13 }}</span>
+              </div>
+              <div class="queue-count-item">
+                <span class="board-label">19x19</span>
+                <span class="player-count">{{ queue_counts.19 }}</span>
+              </div>
             </div>
           </div>
-        </div>
-        {% endif %}
-        
-        <div class="go-row">
+          {% endif %}
+          
           <form id="queue-form" action="{% url 'player_queue:add' %}" method="post" class="go-row">
             {% csrf_token %}
             
@@ -75,9 +118,9 @@
             
             <button type="submit" class="stone-white">Find me a match</button>
           </form>
-        </div>
 
-        <div class="go-footer">Tip: 19x19 is the full board, 9x9 is great for quick games.</div>
+          <div class="go-footer">Tip: You'll be matched with a player of similar skill.</div>
+        </div>
       </div>
 
       <!-- Profile Section -->
@@ -124,9 +167,11 @@
 </div>
 
 <!-- Navigation JavaScript -->
+<!-- Navigation JavaScript -->
 {% if user.is_authenticated %}
 <script>
   document.addEventListener('DOMContentLoaded', function() {
+    // Tab navigation
     const navItems = document.querySelectorAll('.nav-item');
     const sections = document.querySelectorAll('.section-content');
 
@@ -143,6 +188,60 @@
         document.getElementById(targetSection + '-section').classList.add('active');
       });
     });
+
+    // Game mode toggle
+    const modeButtons = document.querySelectorAll('.mode-btn');
+    const gameModes = document.querySelectorAll('.game-mode-content');
+
+    modeButtons.forEach(button => {
+      button.addEventListener('click', function() {
+        const targetMode = this.getAttribute('data-mode');
+
+        // Update active mode button
+        modeButtons.forEach(btn => btn.classList.remove('active'));
+        this.classList.add('active');
+
+        // Update visible game mode
+        gameModes.forEach(mode => mode.classList.remove('active'));
+        document.getElementById(targetMode + '-mode').classList.add('active');
+      });
+    });
+
+    // Bot form submission
+    const botForm = document.getElementById('bot-form');
+    if (botForm) {
+      botForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const difficulty = document.getElementById('bot-difficulty').value;
+        const boardSize = document.getElementById('bot-board-size').value;
+        const playerColor = document.getElementById('player-color').value;
+        const username = '{{ user.username }}';
+
+        try {
+          const response = await fetch(`/bot/new/${username}/${difficulty}/${boardSize}/${playerColor}/`, {
+            method: 'POST',
+            headers: {
+              'X-CSRFToken': '{{ csrf_token }}',
+              'Content-Type': 'application/json'
+            },
+            credentials: 'same-origin'
+          });
+
+          const data = await response.json();
+          
+          if (data.ok && data.data && data.data.game_id) {
+            // Redirect to the game
+            window.location.href = `/game/${data.data.game_id}/`;
+          } else {
+            alert('Failed to create bot game: ' + (data.message || 'Unknown error'));
+          }
+        } catch (error) {
+          console.error('Error creating bot game:', error);
+          alert('Network error. Please try again.');
+        }
+      });
+    }
   });
 </script>
 {% endif %}

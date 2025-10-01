@@ -5,6 +5,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("accounts/", include("accounts.urls")),
     path("game/", include(("game.urls", "game"), namespace="game")),
+    path("bot/", include(("bot.urls", "bot"), namespace="bot")),
     path("home/", include(("main_page.urls", "home"), namespace="home")),
     path(
         "queue/",

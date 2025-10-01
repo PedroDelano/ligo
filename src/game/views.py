@@ -10,6 +10,9 @@ from .controllers.move_validation import MoveValidation
 from .models import GAME_STATUS, Board, Game, LastMoveCache, Move
 from .responses import APIResponse
 from .rules import capture, models
+from bot.services.bot_service import BotService
+from bot.tasks import trigger_bot_move
+from bot.models import BotGame
 
 
 def notify_board_update(board, payload: dict):
@@ -190,6 +193,11 @@ def pass_turn(request, board_id):
         defaults={"move_id": m.id},
     )
     notify_board_update(board, {"type": "pass"})
+
+    # Check if bot should move next - IMPORTANT: Use transaction.on_commit()
+    if BotService.is_bot_turn(board_id):
+        transaction.on_commit(lambda: trigger_bot_move.delay(board_id))
+
     return JsonResponse(APIResponse(data={"move_number": next_num}).model_dump())
 
 
@@ -206,6 +214,8 @@ def place_stone(request, board_id, x, y):
 
     move_validation = MoveValidation.is_valid_move(request=request, board_id=board_id)
     if move_validation.is_valid is False:
+        print(f"Invalid mode: {move_validation.error_code}")
+        print(BotService.is_bot_turn(board_id))
         return JsonResponse(
             APIResponse(
                 ok=False,
@@ -232,7 +242,8 @@ def place_stone(request, board_id, x, y):
         moves=[models.Move(**move) for move in moves],
     )
     _, captured_stones = capture.Capture.remove_captured_stones(
-        game_model, last_played_color="W" if color == "B" else "B"
+        game_model,
+        last_played_color=color.value,
     )
 
     if models.Move(**moves[-1]) in captured_stones:
@@ -252,4 +263,9 @@ def place_stone(request, board_id, x, y):
     )
 
     notify_board_update(board, {"type": "move"})
+
+    # Check if bot should move next - IMPORTANT: Use transaction.on_commit()
+    if BotService.is_bot_turn(board_id):
+        transaction.on_commit(lambda: trigger_bot_move.delay(board_id))
+
     return JsonResponse(APIResponse(data={"move_number": next_num}).model_dump())

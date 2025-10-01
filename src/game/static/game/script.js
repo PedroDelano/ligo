@@ -7,6 +7,7 @@ let GAME_ENDED = false;        // Track if game has ended
 let WINNER = null;             // Track winner
 let TERRITORY = null;          // Territory data
 let SCORE = null;              // Score data
+let MOVE_IN_PROGRESS = false;  // ADD THIS
 
 let CELL = 30;           // px between lines (will be calculated)
 let PADDING = 20;        // outer margin (will be calculated)
@@ -170,18 +171,34 @@ async function sendMove(i, j) {
         return;
     }
 
-    const res = await fetch(`/game/place/${BOARD_ID}/${i}/${j}/`, {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "X-CSRFToken": CSRF_TOKEN }
-    });
-
-    const payload = await res.json();
-    if (!res.ok || payload.error) {
-        showMsg(payload.message || "Move rejected");
+    // ADD THIS CHECK
+    if (MOVE_IN_PROGRESS) {
+        console.log("Move already in progress, ignoring click");
         return;
     }
-    clearMsg();
+
+    // ADD THIS FLAG
+    MOVE_IN_PROGRESS = true;
+
+    try {
+        const res = await fetch(`/game/place/${BOARD_ID}/${i}/${j}/`, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "X-CSRFToken": CSRF_TOKEN }
+        });
+
+        const payload = await res.json();
+        if (!res.ok || payload.ok === false) {
+            showMsg(payload.message || "Move rejected");
+            return;
+        }
+        clearMsg();
+    } finally {
+        // ADD THIS - release lock after a short delay to prevent rapid clicks
+        setTimeout(() => {
+            MOVE_IN_PROGRESS = false;
+        }, 300);
+    }
 }
 
 function showMsg(s, type = 'info') {
@@ -426,6 +443,14 @@ canvas.addEventListener("mouseleave", () => {
 canvas.addEventListener("click", async (e) => {
     if (GAME_ENDED) {
         showMsg("Game has ended - no more moves allowed");
+        return;
+    }
+
+    const isUserTurn = (USER_COLOR === 'black' && turn === 1) ||
+        (USER_COLOR === 'white' && turn === 2);
+
+    if (!isUserTurn) {
+        showMsg("Not your turn!");
         return;
     }
 

@@ -19,6 +19,7 @@ def _get_ongoing_game_id_for(user):
             status=GAME_STATUS.ONGOING.value,
         )
         .filter(Q(user_white=user) | Q(user_black=user))
+        .exclude(bot_game__isnull=False)  # Exclude games with a BotGame relation
         .values_list("id", flat=True)
         .first()
     )

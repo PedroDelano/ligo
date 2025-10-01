@@ -3,6 +3,7 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.contrib.auth.models import AnonymousUser
 
 from .models import Board
+from bot.models import BotGame
 
 
 def group_name(board_id: int) -> str:
@@ -38,6 +39,21 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
             b = Board.objects.filter(id=board_id).select_related("game").get()
         except Board.DoesNotExist:
             return False
+
         if not user.is_authenticated:
             return False
-        return user in (b.game.user_white, b.game.user_black)
+
+        # Check if user is a player
+        if user in (b.game.user_white, b.game.user_black):
+            return True
+
+        # Also allow if one of the players is a bot (for bot games)
+        # In bot games, the human player should be able to connect
+        try:
+            bot_game = BotGame.objects.filter(game=b.game).first()
+            if bot_game:
+                return user == bot_game.get_user_player()
+        except Exception:
+            pass
+
+        return False

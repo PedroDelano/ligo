@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "accounts.apps.AccountsConfig",
     "main_page.apps.MainPageConfig",
     "player_queue.apps.PlayerQueueConfig",
+    "bot.apps.BotConfig",
 ]
 
 MIDDLEWARE = [
@@ -96,6 +97,10 @@ DATABASES = {
         "NAME": BASE_DIR / "db.sqlite3",
     }
 }
+
+# Celery config
+CELERY_BROKER_URL = "redis://localhost:6379/0"
+CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
 
 
 # Password validation
