@@ -1,7 +1,11 @@
 {% load static %}
-<link rel="stylesheet" href="{% static 'player_queue/queue.css' %}" />
+
+<div id="queue-meta" data-status-url="{% url 'player_queue:status' %}" data-username="{{ user.id }}" data-board-size="{{ board_size }}" data-skill-level="{{ skill_level }}"></div>
 
 <div class="queue-wrap">
   <div class="stone spinner" aria-busy="true" aria-live="polite"></div>
   <p>{{ message|default:'You have been added to the queue. Waiting for a match...' }}</p>
 </div>
+
+<link rel="stylesheet" href="{% static 'player_queue/style.css' %}" />
+<script src="{% static 'player_queue/script.js' %}"></script>

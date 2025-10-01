@@ -40,4 +40,4 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
             return False
         if not user.is_authenticated:
             return False
-        return user.username in (b.game.user_white, b.game.user_black)
+        return user in (b.game.user_white, b.game.user_black)

@@ -35,11 +35,14 @@
         <form id="queue-form" action="{% url 'player_queue:add' %}" method="post" class="go-row">
           {% csrf_token %}
           <label for="board-size">Choose board size:</label>
+          {% with chosen=request.POST.board_size|default:"19" %}
           <select id="board-size" name="board_size">
-            <option value="9">9x9</option>
-            <option value="13">13x13</option>
-            <option value="19" selected>19x19</option>
+            <option value="9"  {% if chosen == "9"  %}selected{% endif %}>9x9</option>
+            <option value="13" {% if chosen == "13" %}selected{% endif %}>13x13</option>
+            <option value="19" {% if chosen == "19" %}selected{% endif %}>19x19</option>
           </select>
+          {% endwith %}
+          
 
           <!-- You can let the view default to username, but sending it is fine -->
           <input type="hidden" name="player_name" value="{{ user.username }}" />

@@ -137,7 +137,7 @@ def pass_turn(request, board_id):
             status=400,
         )
 
-    if request.user.username not in [game.user_white, game.user_black]:
+    if request.user not in [game.user_white, game.user_black]:
         return JsonResponse(
             APIResponse(
                 ok=False,
@@ -157,7 +157,7 @@ def pass_turn(request, board_id):
     # Stone color is authoritatively determined by the user making the request
     color = (
         models.StoneColor.BLACK
-        if request.user.username == game.user_black
+        if request.user == game.user_black
         else models.StoneColor.WHITE
     )
 
@@ -241,7 +241,7 @@ def place_stone(request, board_id, x, y):
             status=400,
         )
 
-    if request.user.username not in [game.user_white, game.user_black]:
+    if request.user not in [game.user_white, game.user_black]:
         return JsonResponse(
             APIResponse(
                 ok=False,
@@ -280,7 +280,7 @@ def place_stone(request, board_id, x, y):
     # Stone color is authoritatively determined by the user making the request
     color = (
         models.StoneColor.BLACK
-        if request.user.username == game.user_black
+        if request.user == game.user_black
         else models.StoneColor.WHITE
     )
 

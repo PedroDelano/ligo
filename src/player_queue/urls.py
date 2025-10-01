@@ -6,4 +6,5 @@ app_name = "player_queue"
 
 urlpatterns = [
     path("add/", views.add_player_to_queue, name="add"),
+    path("status/", views.check_queue, name="status"),
 ]

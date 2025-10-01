@@ -13,6 +13,7 @@ class ErrorCode(StrEnum):
     BOARD_NOT_FOUND = "BOARD_NOT_FOUND"
     INTERNAL_ERROR = "INTERNAL_ERROR"
     GAME_ENDED = "GAME_ENDED"
+    FORBIDDEN = "FORBIDDEN"
 
 
 def to_camel(s: str) -> str:

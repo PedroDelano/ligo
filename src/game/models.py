@@ -1,6 +1,9 @@
 from enum import Enum
 
+from django.contrib.auth import get_user_model
 from django.db import models
+
+User = get_user_model()
 
 
 class GAME_STATUS(Enum):
@@ -14,8 +17,18 @@ class GAME_STATUS(Enum):
 class Game(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    user_white = models.CharField(max_length=100)
-    user_black = models.CharField(max_length=100)
+
+    user_white = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="games_as_white",
+    )
+    user_black = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="games_as_black",
+    )
+
     status = models.CharField(
         max_length=20,
         choices=[(tag.value, tag.name) for tag in GAME_STATUS],
@@ -26,7 +39,8 @@ class Game(models.Model):
 class Board(models.Model):
     game = models.ForeignKey(Game, on_delete=models.CASCADE)
     size = models.IntegerField(
-        default=19, choices=[(9, "9x9"), (13, "13x13"), (19, "19x19")]
+        default=19,
+        choices=[(9, "9x9"), (13, "13x13"), (19, "19x19")],
     )
 
 
@@ -41,9 +55,6 @@ class Move(models.Model):
 
     class Meta:
         constraints = [
-            # models.UniqueConstraint(
-            #     fields=["board", "x", "y", "alive"], name="uniq_move_per_intersection"
-            # ),
             models.UniqueConstraint(
                 fields=["board", "move_number"], name="uniq_move_number_per_board"
             ),

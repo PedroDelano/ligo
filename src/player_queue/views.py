@@ -1,4 +1,8 @@
+
+from django.contrib.auth.decorators import login_required
 from django.db import transaction
+from django.db.models import F, Q
+from django.db.models.functions import Abs
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import redirect
 from django.template import loader
@@ -7,111 +11,110 @@ from django.views.decorators.http import require_http_methods
 
 from game.models import GAME_STATUS, Board, Game
 
-from .models import PlayerQueue, PlayerRating
+from .models import PlayerQueue
+
+
+def _get_ongoing_game_id_for(user):
+    return (
+        Game.objects.filter(
+            status=GAME_STATUS.ONGOING.value,
+        )
+        .filter(Q(user_white=user) | Q(user_black=user))
+        .values_list("id", flat=True)
+        .first()
+    )
 
 
 def create_game(player1, player2, board_size):
-    game = Game.objects.create(user_white=player1.username, user_black=player2.username)
+    game = Game.objects.create(user_white=player1, user_black=player2)
     _ = Board.objects.create(game=game, size=board_size)
     return game.id
 
 
 @require_http_methods(["POST"])
 @transaction.atomic
+@login_required
 def add_player_to_queue(request):
     template = loader.get_template("player_queue/index.html")
     user = request.user
-    if not user.is_authenticated:
-        return HttpResponse("Unauthorized", status=401)
 
-    # Check if player is in a game
-    ongoing_game = (
-        Game.objects.filter(
-            user_white=user.username, status=GAME_STATUS.ONGOING
-        ).exists()
-        or Game.objects.filter(
-            user_black=user.username, status=GAME_STATUS.ONGOING
-        ).exists()
-    )
-    if ongoing_game:
-        game_id = (
-            Game.objects.filter(user_white=user.username)
-            .values_list("id", flat=True)
-            .first()
-            or Game.objects.filter(user_black=user.username)
-            .values_list("id", flat=True)
-            .first()
-        )
+    game_id = _get_ongoing_game_id_for(user)
+    if game_id:
         return redirect(reverse("game:get_game", kwargs={"game_id": game_id}))
-
-    player_name = (request.POST.get("player_name") or "").strip()
     try:
         board_size = int(request.POST.get("board_size", "0"))
     except ValueError:
         return HttpResponseBadRequest("Invalid board size")
-
     if board_size not in (9, 13, 19):
         return HttpResponseBadRequest("Invalid board size")
 
-    # Get the user's rating (default to 1000 if none)
-    rating_obj = PlayerRating.objects.filter(user=user).first()
-    user_skill = getattr(rating_obj, "skill_level", 400)
-
-    # Ensure the user is queued exactly once, with normalized data
-    pq, created = PlayerQueue.objects.get_or_create(
+    me = PlayerQueue.objects.update_or_create(
         user=user,
-        defaults={
-            "player_name": player_name or user.username,
-            "skill_level": user_skill,
-            "board_size": board_size,
-        },
+        defaults={"board_size": board_size, "skill_level": 400},
     )
-    # If already present, keep their latest preferences in sync
-    if not created:
-        if (
-            pq.player_name != player_name and player_name
-        ) or pq.board_size != board_size:
-            pq.player_name = player_name or pq.player_name
-            pq.board_size = board_size
-            pq.skill_level = user_skill
-            pq.save(update_fields=["player_name", "board_size", "skill_level"])
+    context = {
+        "message": "You have been added to the queue. Waiting for a match...",
+        "board_size": board_size,
+        "skill_level": me[0].skill_level,
+    }
+    return HttpResponse(template.render(context, request))
 
-    me_locked = (
-        PlayerQueue.objects.select_for_update()
-        .filter(user=user, board_size=board_size)
-        .first()
-    )
-    if not me_locked:
-        return redirect("player_queue:index")
 
-    low = user_skill - 100
-    high = user_skill + 100
+@require_http_methods(["POST"])
+@transaction.atomic
+@login_required
+def check_queue(request):
+    template = loader.get_template("player_queue/index.html")
+    user = request.user
 
-    # Lock a compatible opponent; skip rows already locked by another txn
+    game_id = _get_ongoing_game_id_for(user)
+    if game_id:
+        return redirect(reverse("game:get_game", kwargs={"game_id": game_id}))
+
+    if not PlayerQueue.objects.filter(user=user.id).exists():
+        return HttpResponseBadRequest("User not in queue")
+
+    try:
+        board_size = int(request.POST.get("board_size", "0"))
+    except ValueError:
+        return HttpResponseBadRequest("Invalid board size")
+    if board_size not in (9, 13, 19):
+        return HttpResponseBadRequest("Invalid board size")
+
+    # Ensure the user is queued and fetch their row (locked)
+    try:
+        me = PlayerQueue.objects.select_for_update().get(user=user)
+    except PlayerQueue.DoesNotExist:
+        return HttpResponseBadRequest("User not in queue")
+
+    board_size = me.board_size
+    skill_level = me.skill_level
+
+    # Find nearest-skill opponent on same board size, not me (lock & skip locked to avoid races)
     opponent = (
         PlayerQueue.objects.select_for_update(skip_locked=True)
         .filter(board_size=board_size)
         .exclude(user=user)
-        .filter(skill_level__gte=low, skill_level__lte=high)
-        .order_by("created_at")
+        .annotate(diff=Abs(F("skill_level") - skill_level))
+        .order_by("diff", "created_at")
         .first()
     )
 
     if not opponent:
         context = {
-            "message": "You have been added to the queue. Waiting for a match..."
+            "message": "You have been added to the queue. Waiting for a match...",
+            "board_size": board_size,
         }
         return HttpResponse(template.render(context, request))
 
-    opponent_user = opponent.user
+    # Exit both from queue
     opponent.delete()
-    me_locked.delete()
+    me.delete()
 
     game_id = create_game(
         player1=user,
-        player2=opponent_user,
+        player2=opponent.user,
         board_size=board_size,
     )
-    print(f"Matched {user.username} vs {opponent_user.username} in game {game_id}")
-
+    print(f"Matched {user.username} vs {opponent.user} in game {game_id}")
     return redirect(reverse("game:get_game", kwargs={"game_id": game_id}))
