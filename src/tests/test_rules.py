@@ -127,7 +127,7 @@ CAPTURES = [
             (5, 3, "W"),
             (3, 2, "W"),  # Last move (eye fill)
         ],
-        "captured": [(2, 2, "B"), (3, 2, "B"), (3, 3, "B"), (4, 3, "B")],
+        "captured": [(2, 2, "B"), (3, 3, "B"), (4, 3, "B")],
     },
     {
         "name": "Square Eye Fill (M is last move)",
