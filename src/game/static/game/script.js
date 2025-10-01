@@ -5,9 +5,11 @@ let turn = 1;                  // 1 black, 2 white
 let READY = false;
 let GAME_ENDED = false;        // Track if game has ended
 let WINNER = null;             // Track winner
+let TERRITORY = null;          // Territory data
+let SCORE = null;              // Score data
 
 let CELL = 30;           // px between lines (will be calculated)
-const PADDING = 20;      // outer margin
+let PADDING = 20;        // outer margin (will be calculated)
 
 const meta = document.getElementById("meta");
 const BOARD_ID = Number(meta.dataset.boardId);
@@ -28,18 +30,22 @@ function calculateCellSize() {
     if (!container) return 30;
 
     // Get container dimensions accounting for padding
-    const containerWidth = container.clientWidth - 40;  // 20px padding on each side
+    const containerWidth = container.clientWidth - 40;
     const containerHeight = container.clientHeight - 40;
 
     // Use the smaller dimension to ensure board fits
     const availableSpace = Math.min(containerWidth, containerHeight);
 
-    // Calculate cell size based on board size
-    const totalPadding = PADDING * 2;
-    const cellSize = Math.floor((availableSpace - totalPadding) / (SIZE - 1));
+    // Calculate cell size - reserve space for stone radius on edges
+    const stoneMargin = 30; // Extra margin for stones at edges
+    const cellSize = Math.floor((availableSpace - stoneMargin) / (SIZE - 1));
 
     // Ensure minimum readable size
     CELL = Math.max(cellSize, 15);
+
+    // Calculate padding to accommodate full stone radius plus margin
+    const stoneRadius = Math.floor(CELL * 0.44);
+    PADDING = stoneRadius + 8; // Add 8px extra margin
 
     return CELL;
 }
@@ -93,6 +99,8 @@ async function loadBoard() {
     // Update game ended state
     GAME_ENDED = payload.game_ended || false;
     WINNER = payload.winner || null;
+    TERRITORY = payload.territory || null;
+    SCORE = payload.score || null;
 
     updateTurnLabel();
     updateGameEndedUI();
@@ -104,6 +112,7 @@ async function loadBoard() {
 function updateGameEndedUI() {
     const passButton = document.getElementById("pass");
     const boardContainer = document.querySelector('.board-container');
+    const scorePanel = document.getElementById("score-panel");
 
     if (GAME_ENDED) {
         // Disable pass button
@@ -112,7 +121,6 @@ function updateGameEndedUI() {
 
         // Add visual indicator to board
         boardContainer.classList.add('game-ended');
-        canvas.style.cursor = 'not-allowed';
 
         // Show winner message
         const winnerText = WINNER === 'black' ? 'Black' : 'White';
@@ -123,13 +131,37 @@ function updateGameEndedUI() {
         turnText.textContent = `Winner: ${winnerText}`;
         turnText.style.color = '#10b981';
         turnText.style.fontWeight = '700';
+
+        // Display score panel
+        if (SCORE && scorePanel) {
+            scorePanel.style.display = 'block';
+            updateScoreDisplay();
+        }
     } else {
         // Reset UI for ongoing game
         passButton.disabled = false;
         passButton.textContent = "Pass Turn";
         boardContainer.classList.remove('game-ended');
-        canvas.style.cursor = 'crosshair';
+        if (scorePanel) {
+            scorePanel.style.display = 'none';
+        }
     }
+}
+
+function updateScoreDisplay() {
+    if (!SCORE) return;
+
+    document.getElementById('black-stones').textContent = SCORE.black_stones;
+    document.getElementById('black-territory').textContent = SCORE.black_territory;
+    document.getElementById('black-total').textContent = SCORE.black_total.toFixed(1);
+
+    document.getElementById('white-stones').textContent = SCORE.white_stones;
+    document.getElementById('white-territory').textContent = SCORE.white_territory;
+    document.getElementById('white-komi').textContent = SCORE.komi;
+    document.getElementById('white-total').textContent = SCORE.white_total.toFixed(1);
+
+    document.getElementById('final-winner').textContent = SCORE.winner === 'black' ? 'Black' : 'White';
+    document.getElementById('final-margin').textContent = SCORE.margin.toFixed(1);
 }
 
 async function sendMove(i, j) {
@@ -204,10 +236,39 @@ function drawBoard() {
     // Draw star points
     drawStarPoints();
 
-    // Add opacity overlay if game ended
-    if (GAME_ENDED) {
-        ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
-        ctx.fillRect(0, 0, W, H);
+    // Draw territory indicators if game ended
+    if (GAME_ENDED && TERRITORY) {
+        drawTerritories();
+    }
+}
+
+function drawTerritories() {
+    if (!TERRITORY) return;
+
+    const r = Math.floor(CELL * 0.25);
+
+    // Draw black territory
+    ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+    for (const [i, j] of TERRITORY.black) {
+        const { x, y } = coordToPx(i, j);
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+
+    // Draw white territory
+    ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.3)";
+    ctx.lineWidth = 1;
+    for (const [i, j] of TERRITORY.white) {
+        const { x, y } = coordToPx(i, j);
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+        ctx.strokeRect(x - r, y - r, r * 2, r * 2);
+    }
+
+    // Draw neutral territory (dame)
+    ctx.fillStyle = "rgba(128, 128, 128, 0.2)";
+    for (const [i, j] of TERRITORY.neutral) {
+        const { x, y } = coordToPx(i, j);
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
     }
 }
 
@@ -322,7 +383,11 @@ async function sendPass() {
         // Check if game ended
         if (payload.data && payload.data.game_ended) {
             GAME_ENDED = true;
+            TERRITORY = payload.data.territory;
+            SCORE = payload.data.score;
+            WINNER = payload.data.score?.winner;
             updateGameEndedUI();
+            render(); // Re-render to show territories
         }
 
         clearMsg();

@@ -62,6 +62,54 @@
           <div id="turn-stone" class="status-stone black-stone"></div>
         </div>
         <button id="pass" class="pass-button">Pass Turn</button>
+
+        <!-- Score Panel (shown when game ends) -->
+        <div id="score-panel" class="score-panel">
+          <h3>🏆 Final Score</h3>
+
+          <div class="score-section">
+            <h4><span class="score-stone black"></span> Black</h4>
+            <div class="score-row">
+              <span class="score-label">Stones on board:</span>
+              <span class="score-value" id="black-stones">0</span>
+            </div>
+            <div class="score-row">
+              <span class="score-label">Territory:</span>
+              <span class="score-value" id="black-territory">0</span>
+            </div>
+            <div class="score-row total">
+              <span class="score-label">Total:</span>
+              <span class="score-value" id="black-total">0</span>
+            </div>
+          </div>
+
+          <div class="score-section">
+            <h4><span class="score-stone white"></span> White</h4>
+            <div class="score-row">
+              <span class="score-label">Stones on board:</span>
+              <span class="score-value" id="white-stones">0</span>
+            </div>
+            <div class="score-row">
+              <span class="score-label">Territory:</span>
+              <span class="score-value" id="white-territory">0</span>
+            </div>
+            <div class="score-row">
+              <span class="score-label">Komi:</span>
+              <span class="score-value" id="white-komi">7.5</span>
+            </div>
+            <div class="score-row total">
+              <span class="score-label">Total:</span>
+              <span class="score-value" id="white-total">0</span>
+            </div>
+          </div>
+
+          <div class="final-result">
+            <div class="winner-name" id="final-winner">Black</div>
+            <div>
+              wins by <span id="final-margin">0</span> points
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Messages (bottom) -->

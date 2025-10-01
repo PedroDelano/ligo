@@ -5,6 +5,8 @@ from django.http import HttpResponse, JsonResponse
 from django.template import loader
 from django.views.decorators.http import require_http_methods
 
+from .controllers.finish_game import FinishGame
+from .controllers.move_validation import MoveValidation
 from .models import GAME_STATUS, Board, Game, LastMoveCache, Move
 from .responses import APIResponse
 from .rules import capture, models
@@ -102,11 +104,13 @@ def board_state(request, board_id):
     game_status = game.status if game else GAME_STATUS.ONGOING.value
     game_ended = game_status != GAME_STATUS.ONGOING.value
     winner = None
+    score_data = None
+    territory_data = None
+
     if game_ended:
-        if game_status == GAME_STATUS.BLACK_WON.value:
-            winner = "black"
-        elif game_status == GAME_STATUS.WHITE_WON.value:
-            winner = "white"
+        score_data, territory_data = FinishGame.get_score_data(board_id)
+        score_data = score_data.model_dump()
+        territory_data = territory_data.model_dump()
 
     return JsonResponse(
         APIResponse(
@@ -119,6 +123,8 @@ def board_state(request, board_id):
                 "game_ended": game_ended,
                 "game_status": game_status,
                 "winner": winner,
+                "score": score_data,
+                "territory": territory_data,
             }
         ).model_dump()
     )
@@ -135,43 +141,21 @@ def pass_turn(request, board_id):
             status=401,
         )
 
-    board = Board.objects.select_for_update().get(id=board_id)
-    if not board:
-        return JsonResponse(
-            APIResponse(
-                ok=False, code="BOARD_NOT_FOUND", message="Board not found"
-            ).model_dump(),
-            status=404,
-        )
-
-    game = Game.objects.select_for_update().get(id=board.game_id)
-    if not game:
-        return JsonResponse(
-            APIResponse(
-                ok=False, code="GAME_NOT_FOUND", message="Game not found"
-            ).model_dump(),
-            status=404,
-        )
-
-    if game.status != GAME_STATUS.ONGOING.value:
+    move_validation = MoveValidation.is_valid_move(request=request, board_id=board_id)
+    if move_validation.is_valid is False:
         return JsonResponse(
             APIResponse(
                 ok=False,
-                code="GAME_ENDED",
-                message="Cannot pass turn: Game was ended",
+                code=move_validation.error_code,
+                message="Invalid Move",
             ).model_dump(),
             status=400,
         )
 
-    if request.user not in [game.user_white, game.user_black]:
-        return JsonResponse(
-            APIResponse(
-                ok=False,
-                code="FORBIDDEN",
-                message="User not part of this game",
-            ).model_dump(),
-            status=403,
-        )
+    board = Board.objects.select_for_update().get(id=board_id)
+    game = Game.objects.select_for_update().get(id=board.game_id)
+    color = move_validation.current_color
+    next_num = move_validation.current_move_number + 1
 
     last = (
         LastMoveCache.objects.select_related("move")
@@ -180,41 +164,22 @@ def pass_turn(request, board_id):
         .first()
     )
 
-    # Stone color is authoritatively determined by the user making the request
-    color = (
-        models.StoneColor.BLACK
-        if request.user == game.user_black
-        else models.StoneColor.WHITE
-    )
-
-    if last is not None and last.get("move__color") == color.value:
-        return JsonResponse(
-            APIResponse(
-                ok=False, code="NOT_YOUR_TURN", message="Invalid move: not your turn"
-            ).model_dump(),
-            status=400,
-        )
-
-    # Check if last move was also a pass
     if last is not None and last.get("move__x") == -1 and last.get("move__y") == -1:
-        # TODO: Define scoring
-        game.status = (
-            GAME_STATUS.BLACK_WON.value
-            if color == models.StoneColor.WHITE
-            else GAME_STATUS.WHITE_WON.value
-        )
-        game.save()
+        score_data, territory_data = FinishGame.finish_game(board_id)
         notify_board_update(board, {"type": "game_ended"})
         return JsonResponse(
             APIResponse(
                 ok=True,
                 code="GAME_ENDED",
                 message=f"Game ended. {'Black' if game.status == GAME_STATUS.BLACK_WON.value else 'White'} won.",
-                data={"game_status": game.status, "game_ended": True},
+                data={
+                    "game_status": game.status,
+                    "game_ended": True,
+                    "score": score_data.model_dump(),
+                    "territory": territory_data.model_dump(),
+                },
             ).model_dump()
         )
-
-    next_num = 1 if last is None else last.get("move__move_number") + 1
 
     # Inserts after validation
     m = Move.objects.create(
@@ -225,7 +190,6 @@ def pass_turn(request, board_id):
         defaults={"move_id": m.id},
     )
     notify_board_update(board, {"type": "pass"})
-
     return JsonResponse(APIResponse(data={"move_number": next_num}).model_dump())
 
 
@@ -240,91 +204,20 @@ def place_stone(request, board_id, x, y):
             status=401,
         )
 
+    move_validation = MoveValidation.is_valid_move(request=request, board_id=board_id)
+    if move_validation.is_valid is False:
+        return JsonResponse(
+            APIResponse(
+                ok=False,
+                code=move_validation.error_code,
+                message="Invalid Move",
+            ).model_dump(),
+            status=400,
+        )
+
     board = Board.objects.select_for_update().get(id=board_id)
-    if not board:
-        return JsonResponse(
-            APIResponse(
-                ok=False, code="BOARD_NOT_FOUND", message="Board not found"
-            ).model_dump(),
-            status=404,
-        )
-
-    game = Game.objects.select_for_update().get(id=board.game_id)
-    if not game:
-        return JsonResponse(
-            APIResponse(
-                ok=False, code="GAME_NOT_FOUND", message="Game not found"
-            ).model_dump(),
-            status=404,
-        )
-
-    if game.status != GAME_STATUS.ONGOING.value:
-        return JsonResponse(
-            APIResponse(
-                ok=False,
-                code="GAME_ENDED",
-                message="Cannot place stone: game was ended",
-            ).model_dump(),
-            status=400,
-        )
-
-    if request.user not in [game.user_white, game.user_black]:
-        return JsonResponse(
-            APIResponse(
-                ok=False,
-                code="FORBIDDEN",
-                message="User not part of this game",
-            ).model_dump(),
-            status=403,
-        )
-
-    if not (0 <= x < board.size and 0 <= y < board.size):
-        return JsonResponse(
-            APIResponse(
-                ok=False,
-                code="OUT_OF_BOUNDS",
-                message="Invalid move: out of bounds",
-            ).model_dump(),
-            status=400,
-        )
-
-    if Move.objects.filter(board=board, x=x, y=y, alive=True).exists():
-        return JsonResponse(
-            APIResponse(
-                ok=False,
-                code="POSITION_OCCUPIED",
-                message="Invalid move: position occupied",
-            ).model_dump()
-        )
-
-    last = (
-        LastMoveCache.objects.select_related("move")
-        .filter(board=board)
-        .values("move__color", "move__move_number")
-        .first()
-    )
-
-    # Stone color is authoritatively determined by the user making the request
-    color = (
-        models.StoneColor.BLACK
-        if request.user == game.user_black
-        else models.StoneColor.WHITE
-    )
-
-    if last is not None and last.get("move__color") == color.value:
-        return JsonResponse(
-            APIResponse(
-                ok=False, code="NOT_YOUR_TURN", message="Invalid move: not your turn"
-            ).model_dump(),
-            status=400,
-        )
-    if last is None and color != models.StoneColor.BLACK:
-        return JsonResponse(
-            APIResponse(
-                ok=False, code="NOT_YOUR_TURN", message="Invalid move: not your turn"
-            ).model_dump(),
-            status=400,
-        )
+    color = move_validation.current_color
+    next_num = move_validation.current_move_number + 1
 
     moves = list(
         Move.objects.filter(board=board, alive=True)
@@ -350,9 +243,6 @@ def place_stone(request, board_id, x, y):
             status=400,
         )
 
-    next_num = 1 if last is None else last.get("move__move_number") + 1
-
-    # Inserts after validation
     m = Move.objects.create(
         board=board, move_number=next_num, x=x, y=y, color=color.value
     )
