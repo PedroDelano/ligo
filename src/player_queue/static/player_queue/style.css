@@ -69,15 +69,15 @@ body {
 /* Top half */
 .stone.spinner::before {
     top: 0;
-    /* white circle with a black center dot */
-    background: radial-gradient(circle at 50% 50%, #000 20%, #fff 21%);
+    /* solid white circle */
+    background: #fff;
 }
 
 /* Bottom half */
 .stone.spinner::after {
     bottom: 0;
-    /* black circle with a white center dot */
-    background: radial-gradient(circle at 50% 50%, #fff 20%, #000 21%);
+    /* solid black circle */
+    background: #000;
 }
 
 /* Queue Message */
