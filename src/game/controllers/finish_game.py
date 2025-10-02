@@ -50,7 +50,6 @@ class FinishGame:
     def get_score_data(board_id: int) -> Tuple[ScoreData, TerritoryData]:
         assert isinstance(board_id, int)
         board = Board.objects.filter(id=board_id).first()
-        game = Game.objects.filter(id=board.game_id).first()
 
         moves = list(
             Move.objects.filter(board=board, alive=True)
@@ -88,7 +87,7 @@ class FinishGame:
             "komi": score.komi,
             "winner": (
                 models.StoneColor.BLACK
-                if game.status == GAME_STATUS.BLACK_WON.value
+                if score.black_total > score.white_total
                 else models.StoneColor.WHITE
             ),
             "margin": score.margin,

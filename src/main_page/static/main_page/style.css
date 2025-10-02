@@ -8,19 +8,19 @@
     justify-content: center;
     align-items: center;
     background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
-    padding: 20px;
+    padding: 40px 20px;
 }
 
 .go-inner {
     background: white;
-    border-radius: 12px;
-    padding: 60px 80px;
-    max-width: 600px;
+    border-radius: 16px;
+    padding: 50px 60px 60px 60px;
+    max-width: 700px;
     width: 100%;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 32px;
     animation: fadeIn 0.5s ease;
 }
 
@@ -32,13 +32,14 @@
     color: #1a1a1a;
     display: flex;
     align-items: center;
-    gap: 15px;
-    margin: 0;
+    justify-content: center;
+    gap: 20px;
+    margin: 0 0 8px 0;
 }
 
 .yy {
-    width: 50px;
-    height: 50px;
+    width: 56px;
+    height: 56px;
     color: #1a1a1a;
     transition: transform 0.3s ease, opacity 0.3s ease;
 }
@@ -50,31 +51,33 @@
 
 /* Text Content */
 .go-inner p {
-    font-size: 1rem;
+    font-size: 1.05rem;
     color: #1a1a1a;
     line-height: 1.6;
     margin: 0;
+    text-align: center;
 }
 
 /* Navigation */
 .go-nav {
     display: flex;
-    gap: 8px;
-    padding: 6px;
+    gap: 10px;
+    padding: 8px;
     background: #fafafa;
-    border-radius: 12px;
+    border-radius: 14px;
     border: 2px solid #f0f0f0;
+    margin-top: 8px;
 }
 
 .nav-item {
     flex: 1;
-    padding: 12px 20px;
+    padding: 14px 24px;
     font-size: 0.95rem;
     font-weight: 500;
     color: #666;
     background: transparent;
     border: none;
-    border-radius: 8px;
+    border-radius: 10px;
     cursor: pointer;
     transition: all 0.3s ease;
     text-transform: uppercase;
@@ -90,7 +93,7 @@
 .nav-item.active {
     background: white;
     color: #1a1a1a;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
 /* Section Content */
@@ -102,63 +105,115 @@
 .section-content.active {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 28px;
 }
 
 .section-title {
-    font-size: 1.75rem;
+    font-size: 1.85rem;
     font-weight: 300;
     color: #1a1a1a;
     letter-spacing: 0.05em;
     margin: 0;
-    padding-bottom: 12px;
+    padding-bottom: 16px;
     border-bottom: 2px solid #f0f0f0;
+    text-align: center;
+}
+
+/* Game Mode Selector */
+.game-mode-selector {
+    display: flex;
+    gap: 12px;
+    padding: 8px;
+    background: #fafafa;
+    border-radius: 14px;
+    border: 2px solid #f0f0f0;
+}
+
+.mode-btn {
+    flex: 1;
+    padding: 14px 24px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #666;
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: inherit;
+}
+
+.mode-btn:hover {
+    color: #1a1a1a;
+    background: rgba(26, 26, 26, 0.05);
+}
+
+.mode-btn.active {
+    background: white;
+    color: #1a1a1a;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* Game Mode Content */
+.game-mode-content {
+    display: none;
+}
+
+.game-mode-content.active {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
 }
 
 /* ELO Rating Section */
 .elo-section {
-    padding: 20px;
+    padding: 28px;
     background: #fafafa;
-    border-radius: 12px;
+    border-radius: 14px;
     border: 2px solid #f0f0f0;
 }
 
 .elo-current {
-    font-size: 32px;
+    font-size: 36px;
     font-weight: bold;
     color: #1a1a1a;
-    margin: 12px 0;
+    margin: 8px 0 4px 0;
+    text-align: center;
 }
 
 .elo-updated {
     font-size: 0.875rem;
     color: #999;
-    margin-bottom: 20px;
+    margin-bottom: 24px;
+    text-align: center;
 }
 
 .elo-history-title {
     font-size: 1.25rem;
-    font-weight: 400;
+    font-weight: 500;
     color: #1a1a1a;
-    margin: 24px 0 16px 0;
-    padding-top: 20px;
+    margin: 28px 0 20px 0;
+    padding-top: 24px;
     border-top: 1px solid #e8e8e8;
+    text-align: center;
 }
 
 /* Settings Section */
 .settings-content {
     display: flex;
     flex-direction: column;
-    gap: 24px;
-    padding: 20px;
+    gap: 28px;
+    padding: 28px;
     background: #fafafa;
-    border-radius: 12px;
+    border-radius: 14px;
     border: 2px solid #f0f0f0;
+    align-items: center;
 }
 
 .settings-content p {
-    font-size: 1rem;
+    font-size: 1.05rem;
     color: #1a1a1a;
+    text-align: center;
 }
 
 .settings-content strong {
@@ -170,38 +225,48 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+    width: 100%;
+    max-width: 300px;
 }
 
 /* Form Container */
 .go-row {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 20px;
     align-items: stretch;
+}
+
+#bot-form {
+    background: #fafafa;
+    border-radius: 14px;
+    padding: 28px;
+    border: 2px solid #f0f0f0;
 }
 
 #queue-form {
     background: #fafafa;
-    border-radius: 12px;
-    padding: 24px;
+    border-radius: 14px;
+    padding: 28px;
     border: 2px solid #f0f0f0;
 }
 
 /* Form Elements */
 .go-row label {
     font-size: 0.95rem;
-    font-weight: 500;
+    font-weight: 600;
     color: #1a1a1a;
     letter-spacing: 0.02em;
+    margin-bottom: -8px;
 }
 
 .go-row select {
-    padding: 12px 16px;
+    padding: 14px 18px;
     font-size: 1rem;
     color: #1a1a1a;
     background: white;
     border: 2px solid #e8e8e8;
-    border-radius: 8px;
+    border-radius: 10px;
     cursor: pointer;
     transition: all 0.3s ease;
     font-family: inherit;
@@ -222,22 +287,23 @@
     background: white;
     border: 2px solid #1a1a1a;
     border-radius: 12px;
-    padding: 16px 24px;
+    padding: 18px 32px;
     font-size: 1rem;
-    font-weight: 500;
+    font-weight: 600;
     color: #1a1a1a;
     cursor: pointer;
     transition: all 0.3s ease;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     font-family: inherit;
+    margin-top: 8px;
 }
 
 .stone-white:hover {
     background: #1a1a1a;
     color: white;
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
 }
 
 .stone-white:active {
@@ -260,14 +326,15 @@
 
 /* Footer Text */
 .go-footer {
-    font-size: 0.875rem;
+    font-size: 0.9rem;
     color: #999;
     font-weight: 400;
     text-align: center;
-    padding: 16px 20px;
+    padding: 16px 24px;
     background: #fafafa;
-    border-radius: 8px;
+    border-radius: 10px;
     border-left: 4px solid #1a1a1a;
+    margin-top: 4px;
 }
 
 /* Animations */
@@ -283,64 +350,119 @@
     }
 }
 
+/* Queue Status */
+.queue-status {
+    background: #f5f5f5;
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    border: 2px solid #f0f0f0;
+}
+
+.queue-count-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 24px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    transition: transform 0.2s ease;
+}
+
+.queue-count-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+}
+
+.board-label {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #666;
+    margin-bottom: 8px;
+    letter-spacing: 0.02em;
+}
+
+.player-count {
+    font-size: 1.75em;
+    font-weight: bold;
+    color: #2c3e50;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .go-inner {
-        padding: 40px 30px;
+        padding: 40px 35px 50px 35px;
     }
 
     .go-inner h1 {
-        font-size: 2rem;
-        flex-direction: column;
-        text-align: center;
+        font-size: 2.2rem;
     }
 
     .yy {
-        width: 40px;
-        height: 40px;
+        width: 48px;
+        height: 48px;
     }
 
     .go-nav {
         flex-direction: column;
+        gap: 8px;
     }
 
     .section-title {
-        font-size: 1.5rem;
+        font-size: 1.6rem;
     }
 
     .elo-current {
-        font-size: 28px;
+        font-size: 32px;
+    }
+
+    #bot-form,
+    #queue-form {
+        padding: 24px;
     }
 }
 
 @media (max-width: 480px) {
     .go-card {
-        padding: 10px;
+        padding: 20px 10px;
     }
 
     .go-inner {
-        padding: 30px 20px;
+        padding: 35px 24px 45px 24px;
+        gap: 28px;
     }
 
     .go-inner h1 {
-        font-size: 1.75rem;
+        font-size: 1.9rem;
     }
 
+    .yy {
+        width: 44px;
+        height: 44px;
+    }
+
+    #bot-form,
     #queue-form {
         padding: 20px;
     }
 
     .stone-white {
-        padding: 14px 20px;
+        padding: 16px 24px;
         font-size: 0.95rem;
     }
 
     .section-title {
-        font-size: 1.25rem;
+        font-size: 1.4rem;
     }
 
     .elo-current {
-        font-size: 24px;
+        font-size: 28px;
+    }
+
+    .game-mode-selector {
+        flex-direction: column;
+        gap: 8px;
     }
 }
 
@@ -354,34 +476,4 @@
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
     }
-}
-
-
-.queue-status {
-    background: #f5f5f5;
-    padding: 15px;
-    border-radius: 8px;
-    margin-bottom: 20px;
-}
-
-.queue-count-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 10px 20px;
-    background: white;
-    border-radius: 6px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.board-label {
-    font-size: 0.85em;
-    color: #666;
-    margin-bottom: 5px;
-}
-
-.player-count {
-    font-size: 1.5em;
-    font-weight: bold;
-    color: #2c3e50;
 }

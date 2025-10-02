@@ -161,7 +161,7 @@ function updateScoreDisplay() {
     document.getElementById('white-komi').textContent = SCORE.komi;
     document.getElementById('white-total').textContent = SCORE.white_total.toFixed(1);
 
-    document.getElementById('final-winner').textContent = SCORE.winner === 'black' ? 'Black' : 'White';
+    document.getElementById('final-winner').textContent = SCORE.winner === 'B' ? 'Black' : 'White';
     document.getElementById('final-margin').textContent = SCORE.margin.toFixed(1);
 }
 
