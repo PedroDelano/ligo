@@ -111,23 +111,27 @@ class FinishGame:
         )
         game.save()
 
-        winner = (
-            game.user_black
-            if score.winner == models.StoneColor.BLACK
-            else game.user_white
-        )
-        loser = game.user_black if winner == game.user_white else game.user_white
+        # Check if this is a bot game - players don't get ratings from bot games
+        is_bot_game = hasattr(game, "bot_game")
 
-        winner_rating = cls._get_user_rating(winner)
-        loser_rating = cls._get_user_rating(loser)
+        if not is_bot_game:
+            winner = (
+                game.user_black
+                if score.winner == models.StoneColor.BLACK
+                else game.user_white
+            )
+            loser = game.user_black if winner == game.user_white else game.user_white
 
-        assert isinstance(winner_rating, int)
-        assert isinstance(loser_rating, int)
+            winner_rating = cls._get_user_rating(winner)
+            loser_rating = cls._get_user_rating(loser)
 
-        rating_diff = abs(winner_rating - loser_rating)
-        rating_gain_lost = max(min(rating_diff, 25), 5)
+            assert isinstance(winner_rating, int)
+            assert isinstance(loser_rating, int)
 
-        cls._update_user_rating(winner, winner_rating + rating_gain_lost)
-        cls._update_user_rating(loser, loser_rating - rating_gain_lost)
+            rating_diff = abs(winner_rating - loser_rating)
+            rating_gain_lost = max(min(rating_diff, 25), 5)
+
+            cls._update_user_rating(winner, winner_rating + rating_gain_lost)
+            cls._update_user_rating(loser, loser_rating - rating_gain_lost)
 
         return score, territory_data
