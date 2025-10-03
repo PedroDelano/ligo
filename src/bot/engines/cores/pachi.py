@@ -1,8 +1,9 @@
+import logging
+import os
 import subprocess
 import threading
+from queue import Empty, Queue
 from typing import Optional, Tuple
-import logging
-from queue import Queue, Empty
 
 from bot.engines.base import BotEngine
 from settings import settings
@@ -13,7 +14,17 @@ logger = logging.getLogger(__name__)
 class PachiGTPEngine:
     """Manages a single Pachi engine process"""
 
-    def __init__(self, pachi_path=settings.PACHI_PATH, threads=2, max_tree_size=512):
+    def __init__(
+        self,
+        pachi_path=settings.PACHI_PATH,
+        threads=2,
+        max_tree_size=512,
+    ):
+        assert isinstance(threads, int)
+        assert isinstance(max_tree_size, int)
+        assert isinstance(pachi_path, str)
+        assert os.path.isfile(pachi_path)
+
         """Initialize Pachi engine subprocess"""
         args = [
             pachi_path,
@@ -35,8 +46,6 @@ class PachiGTPEngine:
         # Start thread to continuously read stderr (to prevent blocking)
         self.stderr_thread = threading.Thread(target=self._read_stderr, daemon=True)
         self.stderr_thread.start()
-
-        # CRITICAL: Wait for initialization to complete
         self._wait_for_initialization()
 
         logger.info(f"Started Pachi engine with {threads} threads")
@@ -81,34 +90,25 @@ class PachiGTPEngine:
         """Send a GTP command and get response (thread-safe)"""
         with self.lock:
             try:
-                # Check if process is still alive
                 if not self.is_alive():
                     logger.error(f"Process died before sending command: {command}")
                     return None
 
-                # Send command
                 self.process.stdin.write(command + "\n")
                 self.process.stdin.flush()
-
-                # Read response according to GTP protocol
-                # Response format: = result\n\n or ? error\n\n
                 response_lines = []
-                first_line = True
 
                 while True:
                     line = self.process.stdout.readline()
-                    if not line:  # EOF
+                    if not line:
                         logger.error(
                             f"Unexpected EOF while reading response for: {command}"
                         )
                         return None
 
                     line = line.rstrip("\n")
-
-                    # Empty line marks end of response
                     if not line:
                         break
-
                     response_lines.append(line)
 
                 response = "\n".join(response_lines)
@@ -132,7 +132,7 @@ class PachiGTPEngine:
                     stderr_output = self.process.stderr.read()
                     if stderr_output:
                         logger.error(f"Pachi stderr: {stderr_output}")
-                except:
+                except Exception:
                     pass
                 return None
             except Exception as e:
@@ -306,7 +306,7 @@ class PachiBot(BotEngine):
         board_size: int,
         difficulty: str,
         pachi_path=settings.PACHI_PATH,
-        pool_size=3,
+        pool_size=settings.PACHI_POOL_SIZE,
     ):
         super().__init__(board_size, difficulty)
         self.pachi_path = pachi_path

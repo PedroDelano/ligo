@@ -1,19 +1,17 @@
-import random
-import time
 import logging
+import time
+from typing import Optional
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.db import transaction
-from django.conf import settings
-from typing import Optional
 
+from bot.engines.cores.pachi import PachiBot
+from bot.engines.cores.random import RandomBot
 from bot.models import BotGame
 from game.models import Board, LastMoveCache, Move
 from game.rules import capture
 from game.rules import models as rule_models
-from bot.engines.cores.pachi import PachiBot
-from bot.engines.cores.random import RandomBot
 
 logger = logging.getLogger()
 
@@ -37,10 +35,7 @@ class BotService:
 
         # Pass pachi path if needed (configure in settings)
         if engine_class == PachiBot:
-            pool_size = getattr(settings, "PACHI_POOL_SIZE", 1)
-            return engine_class(
-                board_size=board_size, difficulty=difficulty, pool_size=pool_size
-            )
+            return engine_class(board_size=board_size, difficulty=difficulty)
 
         return engine_class(board_size, difficulty)
 
@@ -254,7 +249,6 @@ class BotService:
         )
 
     @classmethod
-    @transaction.atomic
     def make_bot_move(cls, board_id: int) -> Optional[dict]:
         """Make a bot move on the given board"""
 

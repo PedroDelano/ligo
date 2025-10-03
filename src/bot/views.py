@@ -4,9 +4,9 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
 from bot.models import BotGame, BotPlayer
+from bot.tasks import trigger_bot_move
 from game.models import Board, Game
 from game.responses import APIResponse
-from bot.tasks import trigger_bot_move
 
 User = get_user_model()
 

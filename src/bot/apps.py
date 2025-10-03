@@ -1,8 +1,10 @@
 # bot/apps.py
 import atexit
 import logging
-from bot.engines.cores.pachi import PachiBot
+
 from django.apps import AppConfig
+
+from bot.engines.cores.pachi import PachiBot
 
 logger = logging.getLogger(__name__)
 
