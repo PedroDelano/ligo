@@ -3,8 +3,7 @@ const board = [];              // 0 empty, 1 black, 2 white
 for (let i = 0; i < SIZE; i++) board.push(Array(SIZE).fill(0));
 let turn = 1;                  // 1 black, 2 white
 let READY = false;
-let GAME_ENDED = false;        // Track if game has ended
-let WINNER = null;             // Track winner
+let GAME_STATUS = "ONGOING";   // Track game status
 let TERRITORY = null;          // Territory data
 let SCORE = null;              // Score data
 let MOVE_IN_PROGRESS = false;  // Prevent double-clicks
@@ -26,6 +25,50 @@ const CSRF_TOKEN = (() => {
     const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
     return m ? decodeURIComponent(m[1]) : "";
 })();
+
+// Update the updateScoreDisplay function to handle game status
+function updateScoreDisplay() {
+    if (!SCORE) return;
+
+    document.getElementById('black-stones').textContent = SCORE.black_stones;
+    document.getElementById('black-territory').textContent = SCORE.black_territory;
+    document.getElementById('black-total').textContent = SCORE.black_total.toFixed(1);
+
+    document.getElementById('white-stones').textContent = SCORE.white_stones;
+    document.getElementById('white-territory').textContent = SCORE.white_territory;
+    document.getElementById('white-komi').textContent = SCORE.komi;
+    document.getElementById('white-total').textContent = SCORE.white_total.toFixed(1);
+
+    // Display captures
+    document.getElementById('white-captures').textContent = SCORE.white_captures || 0;
+    document.getElementById('black-captures').textContent = SCORE.black_captures || 0;
+
+    // Display winner and method based on game status
+    const winMethodEl = document.getElementById('win-method');
+
+    switch (GAME_STATUS) {
+        case 'BLACK_RESIGNED':
+            document.getElementById('final-winner').textContent = 'White';
+            winMethodEl.textContent = 'wins by resignation';
+            break;
+        case 'WHITE_RESIGNED':
+            document.getElementById('final-winner').textContent = 'Black';
+            winMethodEl.textContent = 'wins by resignation';
+            break;
+        case 'BLACK_WON':
+            document.getElementById('final-winner').textContent = 'Black';
+            winMethodEl.innerHTML = 'wins by <span id="final-margin">' + SCORE.margin.toFixed(1) + '</span> points';
+            break;
+        case 'WHITE_WON':
+            document.getElementById('final-winner').textContent = 'White';
+            winMethodEl.innerHTML = 'wins by <span id="final-margin">' + SCORE.margin.toFixed(1) + '</span> points';
+            break;
+        default:
+            // Fallback for legacy or unknown status
+            document.getElementById('final-winner').textContent = SCORE.winner === 'B' ? 'Black' : 'White';
+            document.getElementById('final-margin').textContent = SCORE.margin ? SCORE.margin.toFixed(1) : '0';
+    }
+}
 
 // Calculate optimal cell size based on available container space
 function calculateCellSize() {
@@ -73,6 +116,7 @@ function updateCanvasSize() {
     ctx.scale(dpr, dpr);
 }
 
+// Update the loadBoard function to handle game_status
 async function loadBoard() {
     const res = await fetch(`/game/board/${BOARD_ID}/`, {
         method: "GET",
@@ -113,9 +157,8 @@ async function loadBoard() {
 
     turn = payload.next_color === "B" ? 1 : 2;
 
-    // Update game ended state
-    GAME_ENDED = payload.game_ended || false;
-    WINNER = payload.winner || null;
+    // Update game status
+    GAME_STATUS = payload.game_status || "ONGOING";
     TERRITORY = payload.territory || null;
     SCORE = payload.score || null;
 
@@ -123,7 +166,7 @@ async function loadBoard() {
     const isUserTurn = (USER_COLOR === 'black' && turn === 1) ||
         (USER_COLOR === 'white' && turn === 2);
 
-    if (!isUserTurn && !GAME_ENDED && moveChanged) {
+    if (!isUserTurn && GAME_STATUS === "ONGOING" && moveChanged) {
         BOT_THINKING = true;
     }
 
@@ -136,20 +179,47 @@ async function loadBoard() {
 
 function updateGameEndedUI() {
     const passButton = document.getElementById("pass");
+    const resignButton = document.getElementById("resign");
     const boardContainer = document.querySelector('.board-container');
     const scorePanel = document.getElementById("score-panel");
 
-    if (GAME_ENDED) {
-        // Disable pass button
+    const gameEnded = GAME_STATUS !== "ONGOING";
+
+    if (gameEnded) {
+        // Disable buttons
         passButton.disabled = true;
         passButton.textContent = "Game Ended";
+        resignButton.disabled = true;
+        resignButton.textContent = "Game Ended";
 
         // Add visual indicator to board
         boardContainer.classList.add('game-ended');
 
-        // Show winner message
-        const winnerText = WINNER === 'black' ? 'Black' : 'White';
-        showMsg(`Game Over - ${winnerText} wins!`, 'success');
+        // Show winner message based on game status
+        let winnerText, message;
+        switch (GAME_STATUS) {
+            case 'BLACK_RESIGNED':
+                winnerText = 'White';
+                message = `Game Over - ${winnerText} wins by resignation!`;
+                break;
+            case 'WHITE_RESIGNED':
+                winnerText = 'Black';
+                message = `Game Over - ${winnerText} wins by resignation!`;
+                break;
+            case 'BLACK_WON':
+                winnerText = 'Black';
+                message = `Game Over - ${winnerText} wins!`;
+                break;
+            case 'WHITE_WON':
+                winnerText = 'White';
+                message = `Game Over - ${winnerText} wins!`;
+                break;
+            default:
+                winnerText = 'Unknown';
+                message = 'Game Over';
+        }
+
+        showMsg(message, 'success');
 
         // Update turn indicator to show winner
         const turnText = document.getElementById("turn-text");
@@ -166,6 +236,8 @@ function updateGameEndedUI() {
         // Reset UI for ongoing game
         passButton.disabled = false;
         passButton.textContent = "Pass Turn";
+        resignButton.disabled = false;
+        resignButton.textContent = "Resign";
         boardContainer.classList.remove('game-ended');
         if (scorePanel) {
             scorePanel.style.display = 'none';
@@ -173,24 +245,8 @@ function updateGameEndedUI() {
     }
 }
 
-function updateScoreDisplay() {
-    if (!SCORE) return;
-
-    document.getElementById('black-stones').textContent = SCORE.black_stones;
-    document.getElementById('black-territory').textContent = SCORE.black_territory;
-    document.getElementById('black-total').textContent = SCORE.black_total.toFixed(1);
-
-    document.getElementById('white-stones').textContent = SCORE.white_stones;
-    document.getElementById('white-territory').textContent = SCORE.white_territory;
-    document.getElementById('white-komi').textContent = SCORE.komi;
-    document.getElementById('white-total').textContent = SCORE.white_total.toFixed(1);
-
-    document.getElementById('final-winner').textContent = SCORE.winner === 'B' ? 'Black' : 'White';
-    document.getElementById('final-margin').textContent = SCORE.margin.toFixed(1);
-}
-
 async function sendMove(i, j) {
-    if (GAME_ENDED) {
+    if (GAME_STATUS !== "ONGOING") {
         showMsg("Game has ended - no more moves allowed");
         return;
     }
@@ -281,7 +337,7 @@ function drawBoard() {
     drawStarPoints();
 
     // Draw territory indicators if game ended
-    if (GAME_ENDED && TERRITORY) {
+    if (GAME_STATUS !== "ONGOING" && TERRITORY) {
         drawTerritories();
     }
 }
@@ -423,12 +479,12 @@ function render() {
     }
 
     // Draw last move marker
-    if (lastMove && !GAME_ENDED) {
+    if (lastMove && GAME_STATUS === "ONGOING") {
         drawLastMoveMarker(lastMove.i, lastMove.j);
     }
 
     // Draw hover preview only when it's user's turn and game hasn't ended
-    if (!GAME_ENDED && hover.valid && hover.i !== null && hover.j !== null) {
+    if (GAME_STATUS === "ONGOING" && hover.valid && hover.i !== null && hover.j !== null) {
         const isUserTurn = (USER_COLOR === 'black' && turn === 1) ||
             (USER_COLOR === 'white' && turn === 2);
 
@@ -439,7 +495,7 @@ function render() {
 }
 
 async function sendPass() {
-    if (GAME_ENDED) {
+    if (GAME_STATUS !== "ONGOING") {
         showMsg("Game has ended - cannot pass");
         return;
     }
@@ -460,11 +516,10 @@ async function sendPass() {
         }
 
         // Check if game ended
-        if (payload.data && payload.data.game_ended) {
-            GAME_ENDED = true;
+        if (payload.data && payload.data.game_status !== "ONGOING") {
+            GAME_STATUS = payload.data.game_status;
             TERRITORY = payload.data.territory;
             SCORE = payload.data.score;
-            WINNER = payload.data.score?.winner;
             updateGameEndedUI();
             render(); // Re-render to show territories
         } else {
@@ -481,9 +536,53 @@ async function sendPass() {
     } catch {
         showMsg("Network error");
     } finally {
-        if (!GAME_ENDED) {
+        if (GAME_STATUS === "ONGOING") {
             btn.disabled = false;
         }
+    }
+}
+
+async function sendResign() {
+    if (GAME_STATUS !== "ONGOING") {
+        showMsg("Game has already ended");
+        return;
+    }
+
+    // Confirm resignation
+    if (!confirm("Are you sure you want to resign?")) {
+        return;
+    }
+
+    const btn = document.getElementById("resign");
+    btn.disabled = true;
+    showMsg("Resigning...");
+
+    try {
+        const res = await fetch(`/game/resign/${BOARD_ID}`, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "X-CSRFToken": CSRF_TOKEN }
+        });
+        const payload = await res.json().catch(() => ({}));
+
+        if (!res.ok || payload.ok === false) {
+            showMsg(payload.message || "Resignation failed");
+            btn.disabled = false;
+            return;
+        }
+
+        // Game ended by resignation
+        if (payload.data && payload.data.game_status !== "ONGOING") {
+            GAME_STATUS = payload.data.game_status;
+            TERRITORY = payload.data.territory;
+            SCORE = payload.data.score;
+            updateGameEndedUI();
+            render(); // Re-render to show territories
+            showMsg(payload.message || "You have resigned", 'info');
+        }
+    } catch {
+        showMsg("Network error");
+        btn.disabled = false;
     }
 }
 
@@ -498,7 +597,7 @@ function getMousePos(evt) {
 }
 
 canvas.addEventListener("mousemove", (e) => {
-    if (GAME_ENDED) return;
+    if (GAME_STATUS !== "ONGOING") return;
     const { x, y } = getMousePos(e);
     const hit = pxToCoord(x, y);
     hover = hit;
@@ -511,7 +610,7 @@ canvas.addEventListener("mouseleave", () => {
 });
 
 canvas.addEventListener("click", async (e) => {
-    if (GAME_ENDED) {
+    if (GAME_STATUS !== "ONGOING") {
         showMsg("Game has ended - no more moves allowed");
         return;
     }
@@ -541,11 +640,24 @@ function updateTurnLabel() {
     const stoneEl = document.getElementById("turn-stone");
     const thinkingEl = document.getElementById("thinking-indicator");
 
-    if (GAME_ENDED) {
-        const winnerText = WINNER === 'black' ? 'Black' : 'White';
+    if (GAME_STATUS !== "ONGOING") {
+        let winnerText;
+        switch (GAME_STATUS) {
+            case 'BLACK_RESIGNED':
+            case 'WHITE_WON':
+                winnerText = 'White';
+                stoneEl.className = 'status-stone white-stone';
+                break;
+            case 'WHITE_RESIGNED':
+            case 'BLACK_WON':
+                winnerText = 'Black';
+                stoneEl.className = 'status-stone black-stone';
+                break;
+            default:
+                winnerText = 'Unknown';
+        }
         el.textContent = `Winner: ${winnerText}`;
         stoneEl.style.display = 'block';
-        stoneEl.className = WINNER === 'black' ? 'status-stone black-stone' : 'status-stone white-stone';
         thinkingEl.style.display = 'none';
         el.style.color = '#10b981';
         el.style.fontWeight = '700';
@@ -590,6 +702,7 @@ function updateTurnLabel() {
 updateCanvasSize();
 loadBoard();
 document.getElementById("pass").addEventListener("click", sendPass);
+document.getElementById("resign").addEventListener("click", sendResign);
 
 // Handle window resize with debouncing
 let resizeTimeout;

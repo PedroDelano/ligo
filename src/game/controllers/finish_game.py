@@ -28,6 +28,8 @@ class ScoreData(pydantic.BaseModel):
     komi: float
     winner: models.StoneColor
     margin: float
+    white_captures: int
+    black_captures: int
 
 
 class FinishGame:
@@ -61,7 +63,7 @@ class FinishGame:
             moves=[models.Move(**move) for move in moves],
         )
 
-        score = scoring.Scoring.calculate_score(game_model)
+        score = scoring.Scoring.calculate_score(game_model, board)
         territories = scoring.Scoring._find_territories(
             game_model, {(m.x, m.y): m.color for m in game_model.moves}
         )
@@ -84,6 +86,8 @@ class FinishGame:
             "white_stones": score.white_stones,
             "white_territory": score.white_territory,
             "white_total": score.white_total,
+            "white_captures": board.white_captures,
+            "black_captures": board.black_captures,
             "komi": score.komi,
             "winner": (
                 models.StoneColor.BLACK

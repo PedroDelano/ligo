@@ -19,4 +19,5 @@ urlpatterns = [
     path("board/<int:board_id>/", views.board_state, name="board_state"),
     path("<int:game_id>/", views.get_game, name="get_game"),
     path("pass/<int:board_id>", views.pass_turn, name="pass"),
+    path("resign/<int:board_id>", views.resign, name="resign"),
 ]

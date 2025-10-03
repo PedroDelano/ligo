@@ -1,6 +1,8 @@
 from enum import Enum
 from typing import List, Set, Tuple
 
+from game.models import Board
+
 from .models import Game, StoneColor
 
 
@@ -24,6 +26,7 @@ class Score:
 
     def __init__(
         self,
+        board: Board,
         black_stones: int,
         black_territory: int,
         white_stones: int,
@@ -42,8 +45,11 @@ class Score:
         self.white_territory = white_territory
         self.komi = komi
 
-        self.black_total = black_stones + black_territory
-        self.white_total = white_stones + white_territory + komi
+        self.white_captures = board.white_captures
+        self.black_captures = board.black_captures
+
+        self.black_total = black_stones + black_territory - self.white_captures
+        self.white_total = white_stones + white_territory + komi - self.black_captures
 
         self.winner = (
             StoneColor.BLACK
@@ -63,7 +69,7 @@ class Score:
 class Scoring:
     @classmethod
     def calculate_score(
-        cls, game: Game, komi: float = 7.5, debug: bool = False
+        cls, game: Game, board: Board, komi: float = 7.5, debug: bool = False
     ) -> Score:
         """
         Calculate the score using Chinese rules.
@@ -101,7 +107,9 @@ class Scoring:
                 f"Neutral points: {sum(t.size for t in territories if t.owner == TerritoryOwner.NEUTRAL)}"
             )
 
-        return Score(black_stones, black_territory, white_stones, white_territory, komi)
+        return Score(
+            board, black_stones, black_territory, white_stones, white_territory, komi
+        )
 
     @classmethod
     def _find_territories(

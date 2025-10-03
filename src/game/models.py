@@ -9,9 +9,9 @@ User = get_user_model()
 class GAME_STATUS(Enum):
     ONGOING = "ONGOING"
     WHITE_WON = "WHITE_WON"
+    WHITE_RESIGNED = "WHITE_RESIGNED"
     BLACK_WON = "BLACK_WON"
-    DRAW = "DRAW"
-    ABORTED = "ABORTED"
+    BLACK_RESIGNED = "BLACK_RESIGNED"
 
 
 class Game(models.Model):
@@ -42,6 +42,8 @@ class Board(models.Model):
         default=19,
         choices=[(9, "9x9"), (13, "13x13"), (19, "19x19")],
     )
+    white_captures = models.IntegerField(default=0)
+    black_captures = models.IntegerField(default=0)
 
 
 class Move(models.Model):

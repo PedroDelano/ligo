@@ -71,7 +71,14 @@ def board_state(request, board_id):
             ).model_dump(),
             status=404,
         )
-
+    if not request.user.is_authenticated:
+        return JsonResponse(
+            APIResponse(
+                ok=False, code="UNAUTHORIZED", message="User not authenticated"
+            ).model_dump(),
+            status=401,
+        )
+    # move_validation = MoveValidation.is_valid_move(request=request, board_id=board_id)
     board = Board.objects.filter(id=board_id).first()
     game = Game.objects.filter(id=board.game_id).first()
 
@@ -269,3 +276,58 @@ def place_stone(request, board_id, x, y):
         transaction.on_commit(lambda: trigger_bot_move.delay(board_id))
 
     return JsonResponse(APIResponse(data={"move_number": next_num}).model_dump())
+
+
+@transaction.atomic
+def resign(request, board_id):
+    if not request.user.is_authenticated:
+        return JsonResponse(
+            APIResponse(
+                ok=False, code="UNAUTHORIZED", message="User not authenticated"
+            ).model_dump(),
+            status=401,
+        )
+
+    move_validation = MoveValidation.is_valid_move(request=request, board_id=board_id)
+    if move_validation.is_valid is False:
+        print(f"Invalid mode: {move_validation.error_code}")
+        print(BotService.is_bot_turn(board_id))
+        return JsonResponse(
+            APIResponse(
+                ok=False,
+                code=move_validation.error_code,
+                message="Invalid Move",
+            ).model_dump(),
+            status=400,
+        )
+
+    board = Board.objects.select_for_update().get(id=board_id)
+    game = Game.objects.select_for_update().get(id=board.game_id)
+    score_data, territory_data = FinishGame.finish_game(board_id)
+
+    # Determine winner based on who resigned
+    winner_color = "Black" if request.user == game.user_white else "White"
+    game_status = (
+        GAME_STATUS.BLACK_RESIGNED
+        if winner_color == "White"
+        else GAME_STATUS.BLACK_RESIGNED
+    )
+
+    game.status = game_status.value
+    game.save(update_fields=["status"])
+
+    notify_board_update(board, {"type": "game_ended"})
+    return JsonResponse(
+        APIResponse(
+            ok=True,
+            code="GAME_ENDED",
+            message=f"{winner_color} wins by resignation",
+            data={
+                "game_status": game_status.value,
+                "game_ended": True,
+                "score": score_data.model_dump(),
+                "territory": territory_data.model_dump(),
+                "resign_win": True,
+            },
+        ).model_dump()
+    )

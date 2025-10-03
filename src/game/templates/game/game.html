@@ -71,6 +71,7 @@
           </div>
         </div>
         <button id="pass" class="pass-button">Pass Turn</button>
+        <button id="resign" class="resign-button">Resign</button>
 
         <!-- Score Panel (shown when game ends) -->
         <div id="score-panel" class="score-panel">
@@ -85,6 +86,10 @@
             <div class="score-row">
               <span class="score-label">Territory:</span>
               <span class="score-value" id="black-territory">0</span>
+            </div>
+            <div class="score-row">
+              <span class="score-label">Captures by White:</span>
+              <span class="score-value" id="white-captures">0</span>
             </div>
             <div class="score-row total">
               <span class="score-label">Total:</span>
@@ -106,6 +111,10 @@
               <span class="score-label">Komi:</span>
               <span class="score-value" id="white-komi">7.5</span>
             </div>
+            <div class="score-row">
+              <span class="score-label">Captures by Black:</span>
+              <span class="score-value" id="black-captures">0</span>
+            </div>
             <div class="score-row total">
               <span class="score-label">Total:</span>
               <span class="score-value" id="white-total">0</span>
@@ -114,7 +123,7 @@
 
           <div class="final-result">
             <div class="winner-name" id="final-winner">Black</div>
-            <div>
+            <div id="win-method">
               wins by <span id="final-margin">0</span> points
             </div>
           </div>

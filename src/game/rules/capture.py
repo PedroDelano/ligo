@@ -69,9 +69,28 @@ class Capture:
     def mark_captured(board: BoardDB, stones: List[Move]) -> int:
         assert isinstance(board, BoardDB)
         assert all(isinstance(s, Move) for s in stones)
+
         if not stones:
             return 0
+
         q = Q()
         for s in stones:
             q |= Q(x=s.x, y=s.y)
-        return MoveDB.objects.filter(board=board).filter(q).update(alive=False)
+
+        captured_color = stones[0].color
+        assert all([stone.color == captured_color for stone in stones])
+
+        # Update the moves in the database to mark them as dead
+        count = MoveDB.objects.filter(board=board).filter(q).update(alive=False)
+
+        # Update the capture count on the board
+        # When white stones are captured, black gets the capture points
+        # When black stones are captured, white gets the capture points
+        if captured_color == StoneColor.WHITE:
+            board.black_captures += len(stones)
+        elif captured_color == StoneColor.BLACK:
+            board.white_captures += len(stones)
+
+        board.save(update_fields=["white_captures", "black_captures"])
+
+        return count
