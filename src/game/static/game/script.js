@@ -7,7 +7,9 @@ let GAME_ENDED = false;        // Track if game has ended
 let WINNER = null;             // Track winner
 let TERRITORY = null;          // Territory data
 let SCORE = null;              // Score data
-let MOVE_IN_PROGRESS = false;  // ADD THIS
+let MOVE_IN_PROGRESS = false;  // Prevent double-clicks
+let lastMove = null;           // Track last move position {i, j}
+let BOT_THINKING = false;      // Track if bot is thinking
 
 let CELL = 30;           // px between lines (will be calculated)
 let PADDING = 20;        // outer margin (will be calculated)
@@ -88,13 +90,27 @@ async function loadBoard() {
     updateCanvasSize();
 
     const moves = Array.isArray(payload.moves) ? payload.moves : [];
+    const previousLastMove = lastMove ? { ...lastMove } : null;
+    lastMove = null; // Reset last move
     if (!payload.first_move && moves.length) {
         for (const mv of moves) {
             if (mv.x == -1 && mv.y == -1) continue; // pass move
             const color = mv.color === "B" ? 1 : 2;
             board[mv.x][mv.y] = color;
+            lastMove = { i: mv.x, j: mv.y }; // Track the last non-pass move
         }
     }
+
+    // Check if a new move was made (bot played)
+    const moveChanged = !previousLastMove ||
+        !lastMove ||
+        previousLastMove.i !== lastMove.i ||
+        previousLastMove.j !== lastMove.j;
+
+    if (moveChanged) {
+        BOT_THINKING = false; // Bot finished thinking
+    }
+
     turn = payload.next_color === "B" ? 1 : 2;
 
     // Update game ended state
@@ -102,6 +118,14 @@ async function loadBoard() {
     WINNER = payload.winner || null;
     TERRITORY = payload.territory || null;
     SCORE = payload.score || null;
+
+    // Check if it's bot's turn now
+    const isUserTurn = (USER_COLOR === 'black' && turn === 1) ||
+        (USER_COLOR === 'white' && turn === 2);
+
+    if (!isUserTurn && !GAME_ENDED && moveChanged) {
+        BOT_THINKING = true;
+    }
 
     updateTurnLabel();
     updateGameEndedUI();
@@ -171,13 +195,13 @@ async function sendMove(i, j) {
         return;
     }
 
-    // ADD THIS CHECK
+    // Prevent double-clicks
     if (MOVE_IN_PROGRESS) {
         console.log("Move already in progress, ignoring click");
         return;
     }
 
-    // ADD THIS FLAG
+    // Set lock
     MOVE_IN_PROGRESS = true;
 
     try {
@@ -192,9 +216,12 @@ async function sendMove(i, j) {
             showMsg(payload.message || "Move rejected");
             return;
         }
+        lastMove = { i, j }; // Update last move marker
+        BOT_THINKING = true; // Bot will think next
+        updateTurnLabel(); // Update UI to show thinking state
         clearMsg();
     } finally {
-        // ADD THIS - release lock after a short delay to prevent rapid clicks
+        // Release lock after a short delay to prevent rapid clicks
         setTimeout(() => {
             MOVE_IN_PROGRESS = false;
         }, 300);
@@ -353,6 +380,36 @@ function drawStone(i, j, color, alpha = 1) {
     ctx.restore();
 }
 
+function drawLastMoveMarker(i, j) {
+    if (board[i][j] === 0) return; // No stone at this position
+
+    const { x, y } = coordToPx(i, j);
+    const markerRadius = Math.floor(CELL * 0.15);
+    const stoneColor = board[i][j];
+
+    ctx.save();
+
+    // Use subtle contrasting color based on stone color
+    if (stoneColor === 1) {
+        // White marker on black stone
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
+        ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
+    } else {
+        // Dark marker on white stone
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.fillStyle = "rgba(0, 0, 0, 0.1)";
+    }
+
+    // Draw a subtle circle marker
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, markerRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.restore();
+}
+
 function render() {
     if (!READY) return;
     drawBoard();
@@ -363,6 +420,11 @@ function render() {
             const v = board[i][j];
             if (v !== 0) drawStone(i, j, v, 1);
         }
+    }
+
+    // Draw last move marker
+    if (lastMove && !GAME_ENDED) {
+        drawLastMoveMarker(lastMove.i, lastMove.j);
     }
 
     // Draw hover preview only when it's user's turn and game hasn't ended
@@ -405,6 +467,14 @@ async function sendPass() {
             WINNER = payload.data.score?.winner;
             updateGameEndedUI();
             render(); // Re-render to show territories
+        } else {
+            // Game continues, bot may think next
+            const isUserTurn = (USER_COLOR === 'black' && turn === 1) ||
+                (USER_COLOR === 'white' && turn === 2);
+            if (!isUserTurn) {
+                BOT_THINKING = true;
+                updateTurnLabel();
+            }
         }
 
         clearMsg();
@@ -469,26 +539,44 @@ canvas.addEventListener("click", async (e) => {
 function updateTurnLabel() {
     const el = document.getElementById("turn-text");
     const stoneEl = document.getElementById("turn-stone");
+    const thinkingEl = document.getElementById("thinking-indicator");
 
     if (GAME_ENDED) {
         const winnerText = WINNER === 'black' ? 'Black' : 'White';
         el.textContent = `Winner: ${winnerText}`;
+        stoneEl.style.display = 'block';
         stoneEl.className = WINNER === 'black' ? 'status-stone black-stone' : 'status-stone white-stone';
+        thinkingEl.style.display = 'none';
         el.style.color = '#10b981';
         el.style.fontWeight = '700';
         return;
     }
 
     const turnColor = turn === 1 ? "Black" : "White";
+
+    // Check if it's user's turn
+    const isUserTurn = (USER_COLOR === 'black' && turn === 1) ||
+        (USER_COLOR === 'white' && turn === 2);
+
+    // Show spinning yin-yang if bot is thinking
+    if (BOT_THINKING && !isUserTurn) {
+        el.textContent = `${turnColor} is thinking...`;
+        el.style.color = '#f59e0b';
+        el.style.fontWeight = '600';
+        stoneEl.style.display = 'none';
+        thinkingEl.style.display = 'flex';
+        return;
+    }
+
+    // Normal turn display
     el.textContent = `Turn: ${turnColor}`;
+    stoneEl.style.display = 'block';
+    thinkingEl.style.display = 'none';
 
     // Update stone indicator
     stoneEl.className = turn === 1 ? 'status-stone black-stone' : 'status-stone white-stone';
 
     // Highlight when it's user's turn
-    const isUserTurn = (USER_COLOR === 'black' && turn === 1) ||
-        (USER_COLOR === 'white' && turn === 2);
-
     if (isUserTurn) {
         el.style.color = '#667eea';
         el.style.fontWeight = '700';
