@@ -6,6 +6,7 @@ from django.views.decorators.http import require_http_methods
 from bot.models import BotGame, BotPlayer
 from game.models import Board, Game
 from game.responses import APIResponse
+from bot.tasks import trigger_bot_move
 
 User = get_user_model()
 
@@ -52,8 +53,6 @@ def new_bot_game(request, player, bot_difficulty, board_size, player_color):
 
     # If bot plays first, trigger move
     if bot_color == "B":
-        from bot.tasks import trigger_bot_move
-
         trigger_bot_move.delay(board.id)
 
     return JsonResponse(

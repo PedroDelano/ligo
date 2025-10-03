@@ -1,7 +1,7 @@
 import random
 from typing import Optional, Tuple
 
-from .base import BotEngine
+from bot.engines.base import BotEngine
 
 
 class RandomBot(BotEngine):

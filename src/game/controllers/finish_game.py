@@ -111,9 +111,7 @@ class FinishGame:
         )
         game.save()
 
-        # Check if this is a bot game - players don't get ratings from bot games
         is_bot_game = hasattr(game, "bot_game")
-
         if not is_bot_game:
             winner = (
                 game.user_black

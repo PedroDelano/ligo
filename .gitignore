@@ -1,5 +1,8 @@
 # Custom
 PLAN.md
+blobs/*
+engines/*
+!*.gitkeep
 
 # Byte-compiled / optimized / DLL files
 __pycache__
