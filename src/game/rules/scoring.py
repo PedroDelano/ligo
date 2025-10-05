@@ -88,8 +88,12 @@ class Scoring:
         territories = cls._find_territories(game, occupied, debug)
 
         # Count stones and territory for each player
-        black_stones = sum(1 for m in game.moves if m.color == StoneColor.BLACK)
-        white_stones = sum(1 for m in game.moves if m.color == StoneColor.WHITE)
+        black_stones = sum(
+            1 for m in game.moves if m.color == StoneColor.BLACK and m.alive
+        )
+        white_stones = sum(
+            1 for m in game.moves if m.color == StoneColor.WHITE and m.alive
+        )
 
         black_territory = sum(
             t.size for t in territories if t.owner == TerritoryOwner.BLACK

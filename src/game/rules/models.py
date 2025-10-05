@@ -20,6 +20,7 @@ class Move(pydantic.BaseModel):
     y: int
     color: StoneColor
     move_number: int
+    alive: bool = True
 
 
 class Game(pydantic.BaseModel):

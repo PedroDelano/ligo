@@ -10,6 +10,12 @@ from settings import settings
 
 logger = logging.getLogger(__name__)
 
+DIFFICULTY_CONFIG = {
+    "simple": {"threads": 4, "max_tree_size": 256, "thinking_time": 3},
+    "intermediate": {"threads": 4, "max_tree_size": 512, "thinking_time": 7},
+    "advanced": {"threads": 4, "max_tree_size": 2048, "thinking_time": 20},
+}
+
 
 class PachiGTPEngine:
     """Manages a single Pachi engine process"""
@@ -222,12 +228,9 @@ class PachiEnginePool:
 
     def _get_config(self, difficulty):
         """Get configuration for difficulty level"""
-        configs = {
-            "simple": {"threads": 4, "max_tree_size": 256, "thinking_time": 2},
-            "intermediate": {"threads": 4, "max_tree_size": 512, "thinking_time": 5},
-            "advanced": {"threads": 4, "max_tree_size": 2048, "thinking_time": 20},
-        }
-        return configs.get(difficulty, configs["simple"])
+        assert isinstance(difficulty, str)
+        assert difficulty in DIFFICULTY_CONFIG.keys()
+        return DIFFICULTY_CONFIG.get(difficulty)
 
     def _create_engine(self):
         """Create a new engine instance"""
@@ -303,11 +306,6 @@ class PachiBot(BotEngine):
     _pools_lock = threading.Lock()
 
     # Difficulty configurations
-    DIFFICULTY_CONFIG = {
-        "simple": {"threads": 1, "max_tree_size": 256, "time_limit": 5},
-        "intermediate": {"threads": 2, "max_tree_size": 512, "time_limit": 10},
-        "advanced": {"threads": 4, "max_tree_size": 2048, "time_limit": 20},
-    }
 
     def __init__(
         self,

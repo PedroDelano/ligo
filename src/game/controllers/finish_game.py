@@ -56,7 +56,7 @@ class FinishGame:
         moves = list(
             Move.objects.filter(board=board, alive=True)
             .order_by("move_number")
-            .values("x", "y", "color", "move_number")
+            .values("x", "y", "color", "move_number", "alive")
         )
         game_model = models.Game(
             board=models.Board(size=board.size),
