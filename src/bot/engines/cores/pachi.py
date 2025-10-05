@@ -38,6 +38,8 @@ class PachiGTPEngine:
             str(thinking_time),
         ]
 
+        logger.debug(f"Starting engine with {' '.join(args)}")
+
         self.process = subprocess.Popen(
             args,
             stdin=subprocess.PIPE,

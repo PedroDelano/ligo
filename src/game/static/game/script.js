@@ -40,8 +40,8 @@ function updateScoreDisplay() {
     document.getElementById('white-total').textContent = SCORE.white_total.toFixed(1);
 
     // Display captures
-    document.getElementById('white-captures').textContent = SCORE.white_captures || 0;
-    document.getElementById('black-captures').textContent = SCORE.black_captures || 0;
+    document.getElementById('black-captures').textContent = SCORE.white_captures || 0;
+    document.getElementById('white-captures').textContent = SCORE.black_captures || 0;
 
     // Display winner and method based on game status
     const winMethodEl = document.getElementById('win-method');
