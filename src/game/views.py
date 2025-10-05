@@ -13,6 +13,7 @@ from .controllers.move_validation import MoveValidation
 from .models import GAME_STATUS, Board, Game, LastMoveCache, Move
 from .responses import APIResponse
 from .rules import capture, models
+from .rules.utils import invert_color
 
 
 def notify_board_update(board, payload: dict):
@@ -78,7 +79,6 @@ def board_state(request, board_id):
             ).model_dump(),
             status=401,
         )
-    # move_validation = MoveValidation.is_valid_move(request=request, board_id=board_id)
     board = Board.objects.filter(id=board_id).first()
     game = Game.objects.filter(id=board.game_id).first()
 
@@ -250,7 +250,7 @@ def place_stone(request, board_id, x, y):
     )
     _, captured_stones = capture.Capture.remove_captured_stones(
         game_model,
-        last_played_color=color.value,
+        last_played_color=invert_color(color.value),
     )
 
     if models.Move(**moves[-1]) in captured_stones:
@@ -310,7 +310,7 @@ def resign(request, board_id):
     game_status = (
         GAME_STATUS.BLACK_RESIGNED
         if winner_color == "White"
-        else GAME_STATUS.BLACK_RESIGNED
+        else GAME_STATUS.WHITE_RESIGNED
     )
 
     game.status = game_status.value

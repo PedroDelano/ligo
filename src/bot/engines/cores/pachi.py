@@ -16,20 +16,26 @@ class PachiGTPEngine:
 
     def __init__(
         self,
+        threads: int,
+        max_tree_size: int,
+        thinking_time: int,
         pachi_path=settings.PACHI_PATH,
-        threads=2,
-        max_tree_size=512,
     ):
         assert isinstance(threads, int)
         assert isinstance(max_tree_size, int)
         assert isinstance(pachi_path, str)
         assert os.path.isfile(pachi_path)
+        assert threads > 0
+        assert max_tree_size > 32
+        assert thinking_time > 0
 
         """Initialize Pachi engine subprocess"""
         args = [
             pachi_path,
             f"threads={threads}",
             f"max_tree_size={max_tree_size}",
+            "-t",
+            str(thinking_time),
         ]
 
         self.process = subprocess.Popen(
@@ -215,9 +221,9 @@ class PachiEnginePool:
     def _get_config(self, difficulty):
         """Get configuration for difficulty level"""
         configs = {
-            "simple": {"threads": 1, "max_tree_size": 256, "time_limit": 5},
-            "intermediate": {"threads": 2, "max_tree_size": 512, "time_limit": 10},
-            "advanced": {"threads": 4, "max_tree_size": 2048, "time_limit": 20},
+            "simple": {"threads": 4, "max_tree_size": 256, "thinking_time": 2},
+            "intermediate": {"threads": 4, "max_tree_size": 512, "thinking_time": 5},
+            "advanced": {"threads": 4, "max_tree_size": 2048, "thinking_time": 20},
         }
         return configs.get(difficulty, configs["simple"])
 
@@ -225,9 +231,9 @@ class PachiEnginePool:
         """Create a new engine instance"""
         try:
             return PachiGTPEngine(
-                pachi_path=self.pachi_path,
                 threads=self.config["threads"],
                 max_tree_size=self.config["max_tree_size"],
+                thinking_time=self.config["thinking_time"],
             )
         except Exception as e:
             logger.error(f"Failed to create engine: {e}")
