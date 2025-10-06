@@ -48,8 +48,8 @@ class Score:
         self.white_captures = board.white_captures
         self.black_captures = board.black_captures
 
-        self.black_total = black_stones + black_territory - self.white_captures
-        self.white_total = white_stones + white_territory + komi - self.black_captures
+        self.black_total = black_stones + black_territory
+        self.white_total = white_stones + white_territory + komi
 
         self.winner = (
             StoneColor.BLACK
