@@ -1,10 +1,10 @@
-from typing import Optional, List
+from typing import List, Optional
 
 import pydantic
 
 from ..models import GAME_STATUS, Board, Game, LastMoveCache
 from ..responses import ErrorCode
-from ..rules import models, groups, capture
+from ..rules import capture, groups, models
 
 
 class MoveValidationOutput(pydantic.BaseModel):
@@ -69,17 +69,18 @@ class MoveValidation:
             # Assert dict entry
             models.Move(**x)
 
-        # we only need to worry about suicide if there's 0 liberties
+        # Create the game model with the new move
         game_model = models.Game(
             board=models.Board(size=board.size),
             moves=[models.Move(**move) for move in moves],
         )
         last_move = models.Move(**moves[-1])
-        stone_liberty, _ = groups.Groups.count_liberties_for_group(
-            [last_move], game_model
-        )
 
-        if stone_liberty == 0:
+        # Get the GROUP that the last move belongs to, not just the single stone
+        group = groups.Groups.get_group(game_model, last_move)
+        group_liberty = group.liberties
+
+        if group_liberty == 0:
             # Check if placing this stone would capture any enemy stones
             # IMPORTANT: Use invert_color=True to check ENEMY captures, not our own color
             game_after_capture, captured_enemy_stones = (
@@ -87,7 +88,7 @@ class MoveValidation:
                     game_model,
                     last_played_color=color.value,
                     invert_color=True,
-                    debug=True,
+                    debug=False,
                 )
             )
 
@@ -97,24 +98,28 @@ class MoveValidation:
                     is_valid=False, error_code=ErrorCode.INVALID_MOVE
                 )
 
-            # If enemy stones WERE captured, check if our stone now has liberties
+            # If enemy stones WERE captured, check if our group now has liberties
             # after those captures are removed from the board
             else:
                 # Find our stone in the game state after captures
                 our_stone_in_new_state = next(
-                    (m for m in game_after_capture.moves if m.x == x and m.y == y), None
+                    (
+                        m
+                        for m in game_after_capture.moves
+                        if m.x == last_move.x and m.y == last_move.y
+                    ),
+                    None,
                 )
 
                 if our_stone_in_new_state:
-                    # Recalculate liberties for our stone after enemy captures
-                    stone_liberty_after_capture, _ = (
-                        groups.Groups.count_liberties_for_group(
-                            [our_stone_in_new_state], game_after_capture
-                        )
+                    # Get the group and recalculate liberties after enemy captures
+                    group_after_capture = groups.Groups.get_group(
+                        game_after_capture, our_stone_in_new_state
                     )
+                    group_liberty_after_capture = group_after_capture.liberties
 
                     # If still 0 liberties even after capturing enemy stones, it's suicide
-                    if stone_liberty_after_capture == 0:
+                    if group_liberty_after_capture == 0:
                         return MoveValidationOutput(
                             is_valid=False, error_code=ErrorCode.INVALID_MOVE
                         )

@@ -12,8 +12,7 @@ from .controllers.finish_game import FinishGame
 from .controllers.move_validation import MoveValidation
 from .models import GAME_STATUS, Board, Game, LastMoveCache, Move
 from .responses import APIResponse, ErrorCode
-from .rules import capture, models, groups
-from .rules.utils import invert_color
+from .rules import capture, models
 
 
 def notify_board_update(board, payload: dict):

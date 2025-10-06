@@ -1,5 +1,4 @@
 import logging
-import time
 from typing import Optional
 
 from asgiref.sync import async_to_sync

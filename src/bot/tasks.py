@@ -1,9 +1,9 @@
-from celery import shared_task
-
-from bot.services.bot_service import BotService
 import logging
 
+from celery import shared_task
+
 from bot.engines.cores.pachi import PachiBot
+from bot.services.bot_service import BotService
 
 logger = logging.getLogger()
 
