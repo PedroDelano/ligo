@@ -11,6 +11,6 @@ A libre Go website.
 
 ```bash
 docker run --rm -d -p 6379:6379 redis
-uv run celery -A server worker --loglevel=info
+uv run celery -A server worker --pool=threads --concurrency=4 --loglevel=info -n worker1@%h
 uv run daphne -b 0.0.0.0 -p 8000 server.asgi:application
 ```

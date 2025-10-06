@@ -6,24 +6,29 @@ from ..models import Board as BoardDB
 from ..models import Move as MoveDB
 from .groups import Groups
 from .models import Game, Move, StoneColor
+from .utils import invert_color as _invert_color
 
 
 class Capture:
     @classmethod
     def remove_captured_stones(
-        cls, game: Game, last_played_color: StoneColor, debug: bool = False
+        cls,
+        game: Game,
+        last_played_color: StoneColor,
+        invert_color: bool = False,
+        debug: bool = False,
     ) -> Tuple[Game, List[Move]]:
         assert isinstance(game, Game)
         assert isinstance(debug, bool)
+        assert isinstance(invert_color, bool)
         captured_stones: List[Move] = []
         last_played_color = StoneColor(last_played_color)
 
-        # Will check only the opponent's color for captures
-        check_color = (
-            StoneColor.BLACK
-            if last_played_color == StoneColor.WHITE
-            else StoneColor.WHITE
-        )
+        if invert_color is True:
+            check_color = _invert_color(last_played_color)
+        else:
+            check_color = last_played_color
+
         current_move_state = [
             move
             for group in Groups.get_groups(game, last_played_color)

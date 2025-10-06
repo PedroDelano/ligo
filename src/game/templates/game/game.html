@@ -137,6 +137,9 @@
       <div id="meta" data-board-id="{{ board_id }}" data-user-color="{{ user_color }}" style="display: none;"></div>
     </div>
 
+    <script>
+      window.STONE_SOUND_URL = "{% static 'game/assets/stone-on-board.webm' %}"
+    </script>
     <script src="{% static 'game/script.js' %}"></script>
   </body>
 </html>

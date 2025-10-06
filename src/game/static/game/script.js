@@ -13,6 +13,10 @@ let BOT_THINKING = false;      // Track if bot is thinking
 let CELL = 30;           // px between lines (will be calculated)
 let PADDING = 20;        // outer margin (will be calculated)
 
+// Sound effect for stone placement
+const stonePlacementSound = new Audio(window.STONE_SOUND_URL);
+stonePlacementSound.volume = 0.5; // Adjust volume as needed
+
 const meta = document.getElementById("meta");
 const BOARD_ID = Number(meta.dataset.boardId);
 const USER_COLOR = meta.dataset.userColor;
@@ -153,6 +157,11 @@ async function loadBoard() {
 
     if (moveChanged) {
         BOT_THINKING = false; // Bot finished thinking
+        // Play sound for new move (bot's move or any new move detected)
+        if (lastMove) {
+            stonePlacementSound.currentTime = 0;
+            stonePlacementSound.play().catch(() => { }); // Ignore autoplay errors
+        }
     }
 
     turn = payload.next_color === "B" ? 1 : 2;
@@ -274,6 +283,11 @@ async function sendMove(i, j) {
         }
         lastMove = { i, j }; // Update last move marker
         BOT_THINKING = true; // Bot will think next
+
+        // Play stone placement sound
+        stonePlacementSound.currentTime = 0;
+        stonePlacementSound.play().catch(() => { }); // Ignore autoplay errors
+
         updateTurnLabel(); // Update UI to show thinking state
         clearMsg();
     } finally {

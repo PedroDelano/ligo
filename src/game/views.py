@@ -11,8 +11,8 @@ from bot.tasks import trigger_bot_move
 from .controllers.finish_game import FinishGame
 from .controllers.move_validation import MoveValidation
 from .models import GAME_STATUS, Board, Game, LastMoveCache, Move
-from .responses import APIResponse
-from .rules import capture, models
+from .responses import APIResponse, ErrorCode
+from .rules import capture, models, groups
 from .rules.utils import invert_color
 
 
@@ -101,7 +101,7 @@ def board_state(request, board_id):
         moves=[models.Move(**move) for move in moves],
     )
     current_game_state, captured_stones = capture.Capture.remove_captured_stones(
-        game_model, last_played_color=current_color
+        game_model, last_played_color=current_color, invert_color=True
     )
     assert isinstance(current_game_state, models.Game)
     assert all(isinstance(m, models.Move) for m in captured_stones)
@@ -244,19 +244,16 @@ def place_stone(request, board_id, x, y):
     moves.append(
         models.Move(x=x, y=y, color=color, move_number=len(moves)).model_dump()
     )
-    game_model = models.Game(
-        board=models.Board(size=board.size),
-        moves=[models.Move(**move) for move in moves],
-    )
-    _, captured_stones = capture.Capture.remove_captured_stones(
-        game_model,
-        last_played_color=invert_color(color.value),
-    )
 
-    if models.Move(**moves[-1]) in captured_stones:
+    suicide_validation = MoveValidation.is_suicide_move(
+        board=board, moves=moves, color=color
+    )
+    if suicide_validation.is_valid is False:
         return JsonResponse(
             APIResponse(
-                ok=False, code="INVALID_MOVE", message="Invalid move: suicide move"
+                ok=False,
+                code=move_validation.error_code,
+                message="Invalid Move",
             ).model_dump(),
             status=400,
         )
@@ -271,7 +268,6 @@ def place_stone(request, board_id, x, y):
 
     notify_board_update(board, {"type": "move"})
 
-    # Check if bot should move next - IMPORTANT: Use transaction.on_commit()
     if BotService.is_bot_turn(board_id):
         transaction.on_commit(lambda: trigger_bot_move.delay(board_id))
 
@@ -289,7 +285,10 @@ def resign(request, board_id):
         )
 
     move_validation = MoveValidation.is_valid_move(request=request, board_id=board_id)
-    if move_validation.is_valid is False:
+    if (
+        move_validation.is_valid is False
+        and move_validation.error_code != ErrorCode.NOT_YOUR_TURN
+    ):
         print(f"Invalid mode: {move_validation.error_code}")
         print(BotService.is_bot_turn(board_id))
         return JsonResponse(
