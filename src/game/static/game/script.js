@@ -9,6 +9,8 @@ let SCORE = null;              // Score data
 let MOVE_IN_PROGRESS = false;  // Prevent double-clicks
 let lastMove = null;           // Track last move position {i, j}
 let BOT_THINKING = false;      // Track if bot is thinking
+let animatingStone = null;     // {i, j, color, startTime, duration}
+let animationFrame = null;     // Animation frame ID
 
 let CELL = 30;           // px between lines (will be calculated)
 let PADDING = 20;        // outer margin (will be calculated)
@@ -161,6 +163,10 @@ async function loadBoard() {
         if (lastMove) {
             stonePlacementSound.currentTime = 0;
             stonePlacementSound.play().catch(() => { }); // Ignore autoplay errors
+
+            // Animate the newly placed stone
+            const stoneColor = board[lastMove.i][lastMove.j];
+            animateStone(lastMove.i, lastMove.j, stoneColor);
         }
     }
 
@@ -260,14 +266,13 @@ async function sendMove(i, j) {
         return;
     }
 
-    // Prevent double-clicks
     if (MOVE_IN_PROGRESS) {
         console.log("Move already in progress, ignoring click");
         return;
     }
 
-    // Set lock
     MOVE_IN_PROGRESS = true;
+    const playerColor = turn; // ✅ Capture turn value before any async calls
 
     try {
         const res = await fetch(`/game/place/${BOARD_ID}/${i}/${j}/`, {
@@ -281,17 +286,20 @@ async function sendMove(i, j) {
             showMsg(payload.message || "Move rejected");
             return;
         }
-        lastMove = { i, j }; // Update last move marker
-        BOT_THINKING = true; // Bot will think next
 
-        // Play stone placement sound
+        // Use captured playerColor instead of turn
+        board[i][j] = playerColor;
+        lastMove = { i, j };
+        BOT_THINKING = true;
+
         stonePlacementSound.currentTime = 0;
-        stonePlacementSound.play().catch(() => { }); // Ignore autoplay errors
+        stonePlacementSound.play().catch(() => { });
 
-        updateTurnLabel(); // Update UI to show thinking state
+        animateStone(i, j, playerColor); // ✅ Use captured value
+
+        updateTurnLabel();
         clearMsg();
     } finally {
-        // Release lock after a short delay to prevent rapid clicks
         setTimeout(() => {
             MOVE_IN_PROGRESS = false;
         }, 300);
@@ -359,7 +367,7 @@ function drawBoard() {
 function drawTerritories() {
     if (!TERRITORY) return;
 
-    const r = Math.floor(CELL * 0.25);
+    const r = Math.floor(CELL * 0.55);
 
     // Draw black territory
     ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
@@ -409,7 +417,7 @@ function drawStarPoints() {
     }
 }
 
-function drawStone(i, j, color, alpha = 1) {
+function drawStone(i, j, color, alpha = 1, animProgress = null) {
     const { x, y } = coordToPx(i, j);
     const r = Math.floor(CELL * 0.44);
 
@@ -418,6 +426,26 @@ function drawStone(i, j, color, alpha = 1) {
 
     ctx.save();
     ctx.globalAlpha = alpha;
+
+    // Apply wobble animation if animProgress is provided
+    // Stone appears at full size and wobbles due to its convex/oval shape
+    if (animProgress !== null) {
+        ctx.translate(x, y);
+
+        // Damping factor - wobble decreases over time
+        const damping = Math.exp(-3 * animProgress);
+
+        // Wobble frequency (how fast it rocks back and forth)
+        const wobbleFreq = 8;
+        const tilt = Math.sin(animProgress * Math.PI * wobbleFreq) * damping * 0.25;
+
+        // Slight vertical bounce as it settles
+        const verticalBounce = Math.sin(animProgress * Math.PI * 4) * damping * 3;
+
+        ctx.rotate(tilt);
+        ctx.translate(0, -verticalBounce);
+        ctx.translate(-x, -y);
+    }
 
     // Draw stone
     ctx.beginPath();
@@ -480,15 +508,60 @@ function drawLastMoveMarker(i, j) {
     ctx.restore();
 }
 
+// Start stone placement animation
+function animateStone(i, j, color) {
+    animatingStone = {
+        i, j, color,
+        startTime: performance.now(),
+        duration: 500 // 500ms animation
+    };
+
+    function animate(currentTime) {
+        if (!animatingStone) return;
+
+        const elapsed = currentTime - animatingStone.startTime;
+        const progress = Math.min(elapsed / animatingStone.duration, 1);
+
+        render();
+
+        if (progress < 1) {
+            animationFrame = requestAnimationFrame(animate);
+        } else {
+            animatingStone = null;
+            render(); // Final render without animation
+        }
+    }
+
+    if (animationFrame) {
+        cancelAnimationFrame(animationFrame);
+    }
+    animationFrame = requestAnimationFrame(animate);
+}
+
 function render() {
     if (!READY) return;
     drawBoard();
+
+    // Calculate animation progress if animating
+    let animProgress = null;
+    if (animatingStone) {
+        const elapsed = performance.now() - animatingStone.startTime;
+        animProgress = Math.min(elapsed / animatingStone.duration, 1);
+    }
 
     // Draw all placed stones
     for (let i = 0; i < SIZE; i++) {
         for (let j = 0; j < SIZE; j++) {
             const v = board[i][j];
-            if (v !== 0) drawStone(i, j, v, 1);
+            if (v !== 0) {
+                // Check if this stone is being animated
+                if (animatingStone && animatingStone.i === i && animatingStone.j === j) {
+                    // Use the color stored in animatingStone to ensure correct color during animation
+                    drawStone(i, j, animatingStone.color, 1, animProgress);
+                } else {
+                    drawStone(i, j, v, 1);
+                }
+            }
         }
     }
 
