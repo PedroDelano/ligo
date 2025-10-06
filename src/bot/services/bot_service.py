@@ -31,10 +31,11 @@ class BotService:
     def _get_engine(cls, difficulty: str, board_size: int):
         """Get the appropriate bot engine for difficulty level"""
         engine_class = cls.ENGINE_MAP.get(difficulty, RandomBot)
-        logging.info(f"Starting engine: {difficulty}")
+        logger.debug(f"Starting engine: {difficulty}")
 
         # Pass pachi path if needed (configure in settings)
         if engine_class == PachiBot:
+            logger.debug(f"Got {engine_class}:PachiBot engine")
             return engine_class(board_size=board_size, difficulty=difficulty)
 
         return engine_class(board_size, difficulty)
@@ -254,51 +255,33 @@ class BotService:
 
         # Ensures db commits
         # TODO: There must be a better way to do this
-        time.sleep(0.3)
+        # time.sleep(0.3)
+        board = Board.objects.select_for_update().get(id=board_id)
+        bot_game = BotGame.objects.select_related("bot_player").get(game=board.game)
+        logger.info(f"Bot processing move at Board #{board_id}")
 
-        try:
-            board = Board.objects.select_for_update().get(id=board_id)
-            bot_game = BotGame.objects.select_related("bot_player").get(game=board.game)
+        # Check if it's bot's turn
+        move_count = Move.objects.filter(board=board).count()
+        is_black_turn = move_count % 2 == 0
+        bot_is_black = bot_game.bot_color == "B"
 
-            # Check if it's bot's turn
-            move_count = Move.objects.filter(board=board).count()
-            is_black_turn = move_count % 2 == 0
-            bot_is_black = bot_game.bot_color == "B"
-
-            if is_black_turn != bot_is_black:
-                logger.warning(f"Not bot's turn on board {board_id}")
-                return None
-
-            # Get bot engine
-            engine = cls._get_engine(bot_game.bot_player.difficulty, board.size)
-
-            # Get game state
-            game_state = cls._prepare_game_state(board)
-
-            # Select move
-            move_coords = engine.select_move(game_state)
-
-            # Check if bot should pass
-            if move_coords is None or engine.should_pass(game_state):
-                move_coords = (-1, -1)
-
-            # Create move
-            x, y = move_coords
-            cls.commit_move(
-                x=x, y=y, move_count=move_count, board=board, bot_game=bot_game
-            )
-            logger.info(
-                f"Bot made move on board {board_id}: {bot_game.bot_color} at ({x}, {y})"
-            )
-
-            return {"x": x, "y": y, "color": bot_game.bot_color}
-
-        except Board.DoesNotExist:
-            logger.error(f"Board {board_id} not found")
+        if is_black_turn != bot_is_black:
+            logger.warning(f"Not bot's turn on board {board_id}")
             return None
-        except BotGame.DoesNotExist:
-            logger.error(f"BotGame not found for board {board_id}")
-            return None
-        except Exception as e:
-            logger.error(f"Error making bot move: {e}", exc_info=True)
-            return None
+
+        engine = cls._get_engine(bot_game.bot_player.difficulty, board.size)
+        game_state = cls._prepare_game_state(board)
+        move_coords = engine.select_move(game_state)
+
+        # Check if bot should pass
+        if move_coords is None or engine.should_pass(game_state):
+            move_coords = (-1, -1)
+
+        # Create move
+        x, y = move_coords
+        cls.commit_move(x=x, y=y, move_count=move_count, board=board, bot_game=bot_game)
+        logger.info(
+            f"Bot moved on Board #{board_id}: {bot_game.bot_color} at ({x}, {y})"
+        )
+
+        return {"x": x, "y": y, "color": bot_game.bot_color}

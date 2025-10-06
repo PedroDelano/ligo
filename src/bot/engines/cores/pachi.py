@@ -11,9 +11,9 @@ from settings import settings
 logger = logging.getLogger(__name__)
 
 DIFFICULTY_CONFIG = {
-    "simple": {"threads": 4, "max_tree_size": 256, "thinking_time": 3},
-    "intermediate": {"threads": 4, "max_tree_size": 512, "thinking_time": 7},
-    "advanced": {"threads": 4, "max_tree_size": 2048, "thinking_time": 20},
+    "simple": {"threads": 1, "max_tree_size": 128, "thinking_time": 2},
+    "intermediate": {"threads": 1, "max_tree_size": 512},
+    "advanced": {"threads": 1, "max_tree_size": 2048},
 }
 
 
@@ -24,8 +24,8 @@ class PachiGTPEngine:
         self,
         threads: int,
         max_tree_size: int,
-        thinking_time: int,
         pachi_path=settings.PACHI_PATH,
+        thinking_time: Optional[int] = None,
     ):
         assert isinstance(threads, int)
         assert isinstance(max_tree_size, int)
@@ -33,16 +33,19 @@ class PachiGTPEngine:
         assert os.path.isfile(pachi_path)
         assert threads > 0
         assert max_tree_size > 32
-        assert thinking_time > 0
+        if thinking_time:
+            assert isinstance(thinking_time, int)
+            assert thinking_time >= 1
 
         """Initialize Pachi engine subprocess"""
         args = [
             pachi_path,
             f"threads={threads}",
             f"max_tree_size={max_tree_size}",
-            "-t",
-            str(thinking_time),
         ]
+
+        if thinking_time:
+            args.extend(["-t", str(thinking_time)])
 
         logger.debug(f"Starting engine with {' '.join(args)}")
 
@@ -61,7 +64,6 @@ class PachiGTPEngine:
         self.stderr_thread = threading.Thread(target=self._read_stderr, daemon=True)
         self.stderr_thread.start()
         self._wait_for_initialization()
-
         logger.info(f"Started Pachi engine with {threads} threads")
 
     def _read_stderr(self):
@@ -79,7 +81,7 @@ class PachiGTPEngine:
                             "overrides" in line_stripped.lower()
                             and "loaded" in line_stripped.lower()
                         ):
-                            logger.info(
+                            logger.debug(
                                 f"Pachi initialization complete: {line_stripped}"
                             )
                             self.initialization_complete.set()
@@ -88,10 +90,10 @@ class PachiGTPEngine:
 
     def _wait_for_initialization(self, timeout=15.0):
         """Wait for Pachi to complete initialization"""
-        logger.info("Waiting for Pachi initialization...")
+        logger.debug("Waiting for Pachi initialization...")
 
         if self.initialization_complete.wait(timeout=timeout):
-            logger.info("Pachi engine ready")
+            logger.debug("Pachi engine ready")
         else:
             logger.warning(
                 f"Pachi initialization marker not seen within {timeout}s, proceeding anyway"
@@ -226,6 +228,14 @@ class PachiEnginePool:
             f"Created engine pool for {difficulty} with {len(self.all_engines)} instances"
         )
 
+    def get_pool_status(self):
+        """Get current pool status for debugging"""
+        return {
+            "total_engines": len(self.all_engines),
+            "available": self.available_engines.qsize(),
+            "alive": sum(1 for e in self.all_engines if e.is_alive()),
+        }
+
     def _get_config(self, difficulty):
         """Get configuration for difficulty level"""
         assert isinstance(difficulty, str)
@@ -238,45 +248,62 @@ class PachiEnginePool:
             return PachiGTPEngine(
                 threads=self.config["threads"],
                 max_tree_size=self.config["max_tree_size"],
-                thinking_time=self.config["thinking_time"],
+                thinking_time=self.config.get("thinking_time"),
             )
         except Exception as e:
             logger.error(f"Failed to create engine: {e}")
             return None
 
-    def acquire(self, timeout=30):
+    def acquire(self, timeout=3):
         """
         Get an engine from the pool.
         Blocks until an engine is available or timeout.
         """
         try:
             engine = self.available_engines.get(timeout=timeout)
-
-            # Check if engine is still alive
-            if not engine.is_alive():
-                logger.warning("Dead engine detected, creating new one")
-                with self.lock:
-                    if engine in self.all_engines:
-                        self.all_engines.remove(engine)
-                    new_engine = self._create_engine()
-                    if new_engine:
-                        self.all_engines.append(new_engine)
-                        engine = new_engine
-                    else:
-                        logger.error("Failed to create replacement engine")
-                        return None
-
-            return engine
         except Empty:
-            logger.error(f"Timeout waiting for engine from pool ({self.difficulty})")
-            return None
+            logger.error(f"Timeout acquiring engine after {timeout}s - pool exhausted")
+            raise  # Re-raise so caller can handle it
+
+        logger.debug(f"Acquired engine from pool: {engine}")
+
+        if not engine.is_alive():
+            logger.warning("Dead engine detected, creating new one")
+            with self.lock:
+                if engine in self.all_engines:
+                    self.all_engines.remove(engine)
+                new_engine = self._create_engine()
+                if new_engine:
+                    self.all_engines.append(new_engine)
+                    engine = new_engine
+                else:
+                    logger.error("Failed to create replacement engine")
+                    raise RuntimeError("Could not create replacement engine")
+
+        return engine
 
     def release(self, engine):
-        """Return an engine to the pool"""
+        """Return an engine to the pool, replacing if dead"""
         if engine and engine.is_alive():
             self.available_engines.put(engine)
+            logger.debug("Returned healthy engine to pool")
         else:
-            logger.warning("Not returning dead engine to pool")
+            logger.warning("Dead engine detected - creating replacement")
+            # Create replacement engine
+            with self.lock:
+                if engine in self.all_engines:
+                    self.all_engines.remove(engine)
+                new_engine = self._create_engine()
+                if new_engine:
+                    self.all_engines.append(new_engine)
+                    self.available_engines.put(new_engine)
+                    logger.debug(
+                        f"Replaced dead engine. Pool status: {self.get_pool_status()}"
+                    )
+                else:
+                    logger.error(
+                        f"Failed to create replacement engine. Pool shrinking! Status: {self.get_pool_status()}"
+                    )
 
     def cleanup(self):
         """Clean up all engines in pool"""
@@ -295,7 +322,7 @@ class PachiEnginePool:
                 except Empty:
                     break
 
-        logger.info(f"Cleaned up engine pool: {self.difficulty}")
+        logger.debug(f"Cleaned up engine pool: {self.difficulty}")
 
 
 class PachiBot(BotEngine):
@@ -329,7 +356,7 @@ class PachiBot(BotEngine):
                     pool_size=self.pool_size,
                 )
                 self._pools[self.difficulty] = pool
-                logger.info(f"Created new engine pool for: {self.difficulty}")
+                logger.debug(f"Created new engine pool for: {self.difficulty}")
 
     def _setup_game_state(self, engine, game_state: dict):
         """Set up the engine with current game state"""
@@ -392,13 +419,10 @@ class PachiBot(BotEngine):
             logger.error(f"No engine pool for difficulty: {self.difficulty}")
             return None
 
-        # Acquire engine from pool
-        engine = pool.acquire(timeout=30)
-        if not engine:
-            logger.error("Failed to acquire engine from pool")
-            return None
-
+        engine = None
         try:
+            engine = pool.acquire(timeout=5)
+
             # Set up game state in engine
             self._setup_game_state(engine, game_state)
 
@@ -407,25 +431,36 @@ class PachiBot(BotEngine):
             next_color = "black" if len(moves) % 2 == 0 else "white"
 
             # Generate move
+            logger.debug(f"Generating move for {next_color} using {self.difficulty}")
             gtp_move = engine.generate_move(next_color)
 
             if not gtp_move or gtp_move.lower() in ["pass", "resign"]:
-                logger.info(f"Pachi decided to pass/resign: {gtp_move}")
+                logger.debug(f"Pachi decided to pass/resign: {gtp_move}")
                 return None
 
             # Convert to coordinates
             x, y = self._gtp_to_coords(gtp_move, game_state["board_size"])
-            logger.info(f"Pachi selected move: {gtp_move} -> ({x}, {y})")
-
+            logger.debug(f"Pachi selected move: {gtp_move} -> ({x}, {y})")
             return (x, y)
 
-        except Exception as e:
-            logger.error(f"Error in PachiBot.select_move: {e}", exc_info=True)
+        except Empty:
+            logger.error(
+                f"Timeout acquiring engine - pool exhausted. Status: {pool.get_pool_status()}"
+            )
             return None
-
+        except Exception as e:
+            logger.error(f"Error in select_move: {e}", exc_info=True)
+            return None
         finally:
-            # ALWAYS return engine to pool
-            pool.release(engine)
+            # Always try to release engine if we got one
+            if engine is not None:
+                try:
+                    pool.release(engine)
+                    logger.debug(
+                        f"Released engine. Pool status: {pool.get_pool_status()}"
+                    )
+                except Exception as e:
+                    logger.error(f"Error releasing engine: {e}")
 
     def should_pass(self, game_state: dict) -> bool:
         """Pachi decides itself whether to pass via genmove"""
@@ -438,7 +473,7 @@ class PachiBot(BotEngine):
             for difficulty, pool in cls._pools.items():
                 try:
                     pool.cleanup()
-                    logger.info(f"Cleaned up pool: {difficulty}")
+                    logger.debug(f"Cleaned up pool: {difficulty}")
                 except Exception as e:
                     logger.error(f"Error cleaning up pool {difficulty}: {e}")
             cls._pools.clear()
